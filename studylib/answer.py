@@ -49,24 +49,22 @@ def build(code, num, tag=None):
     sc = local.repo_from_remote(repo, "src", "sourcecraft")
     val = v["values"]
 
-    # Незаполненные ссылки в ответ не попадают: перечисляем только то, что записано.
+    # Без заголовков (в Moodle они выходят огромными), незаполненные ссылки не печатаем.
     def hosting(playlist_key, name, keys):
         links = [f"  - [{t}]({val[k]})" for k, t in keys if val.get(k)]
         if not links and not val.get(playlist_key):
             return []
-        head = f"- [{name}]({val[playlist_key]})" if val.get(playlist_key) else f"- {name}"
-        return [head] + links + [""]
+        head = (f"- Скринкасты, {name}: [плейлист]({val[playlist_key]})"
+                if val.get(playlist_key) else f"- Скринкасты, {name}:")
+        return [head] + links
 
-    body = ["## Скринкасты", ""]
-    body += hosting("RUTUBE_PLAYLIST", "Rutube", KEYS[:4])
+    body = hosting("RUTUBE_PLAYLIST", "Rutube", KEYS[:4])
     body += hosting("VK_PLAYLIST", "VKvideo", KEYS[4:])
-    if body[-1] == "":
-        body.pop()
-    body += ["", "## Репозитории", "",
-             f"- [gitverse](https://gitverse.ru/{gv})",
-             f"  - [Релиз {tag}](https://gitverse.ru/{gv}/releases/tag/{tag})",
-             f"- [sourcecraft](https://sourcecraft.dev/{sc})",
-             f"  - [Релиз {tag}](https://sourcecraft.dev/{sc}/releases/{tag})", ""]
+    body += ["- Репозиторий и релиз:",
+             f"  - [gitverse](https://gitverse.ru/{gv}), "
+             f"[релиз {tag}](https://gitverse.ru/{gv}/releases/tag/{tag})",
+             f"  - [sourcecraft](https://sourcecraft.dev/{sc}), "
+             f"[релиз {tag}](https://sourcecraft.dev/{sc}/releases/{tag})", ""]
     text = "\n".join(body)
 
     out = into / f"{kind}{num}.md"
