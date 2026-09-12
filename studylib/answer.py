@@ -26,16 +26,17 @@ TEMPLATE = ("# Ссылки на скринкасты для ответа в Т�
 
 def build(code, num, tag=None):
     """Текст ответа и список вложений. Нет videos.env — создаётся пустой."""
-    num = str(num).zfill(2)
+    # Номер вида 01 — лабораторная labs/lab01; hw01 — домашняя работа homework/hw01.
+    kind, num = local.work_id(num)
     repo = local.course_repo(code)
     if not repo:
         raise StudyError("local", f"не найден репозиторий курса в {ROOT / code}")
-    lab = repo / "labs" / f"lab{num}"
+    lab = repo / local.WORK_DIRS[kind] / f"{kind}{num}"
     if not lab.is_dir():
         raise StudyError("local", f"нет каталога {lab}")
 
     into = local.tuis_dir(code)
-    v = local.videos(code, num)
+    v = local.videos(code, num, kind)
     if not v["exists"]:
         into.mkdir(parents=True, exist_ok=True)
         pathlib.Path(v["path"]).write_text(
@@ -48,16 +49,19 @@ def build(code, num, tag=None):
     sc = local.repo_from_remote(repo, "src", "sourcecraft")
     val = v["values"]
 
-    def link(key, title):
-        return f"  - [{title}]({val[key]})" if val.get(key) else f"  - {title}: ССЫЛКА НЕ ЗАПОЛНЕНА"
+    # Незаполненные ссылки в ответ не попадают: перечисляем только то, что записано.
+    def hosting(playlist_key, name, keys):
+        links = [f"  - [{t}]({val[k]})" for k, t in keys if val.get(k)]
+        if not links and not val.get(playlist_key):
+            return []
+        head = f"- [{name}]({val[playlist_key]})" if val.get(playlist_key) else f"- {name}"
+        return [head] + links + [""]
 
-    def playlist(key, name):
-        return f"[{name}]({val[key]})" if val.get(key) else f"{name}: ПЛЕЙЛИСТ НЕ ЗАПОЛНЕН"
-
-    body = ["## Скринкасты", "", "- " + playlist("RUTUBE_PLAYLIST", "Rutube")]
-    body += [link(k, t) for k, t in KEYS[:4]]
-    body += ["", "- " + playlist("VK_PLAYLIST", "VKvideo")]
-    body += [link(k, t) for k, t in KEYS[4:]]
+    body = ["## Скринкасты", ""]
+    body += hosting("RUTUBE_PLAYLIST", "Rutube", KEYS[:4])
+    body += hosting("VK_PLAYLIST", "VKvideo", KEYS[4:])
+    if body[-1] == "":
+        body.pop()
     body += ["", "## Репозитории", "",
              f"- [gitverse](https://gitverse.ru/{gv})",
              f"  - [Релиз {tag}](https://gitverse.ru/{gv}/releases/tag/{tag})",
@@ -65,7 +69,7 @@ def build(code, num, tag=None):
              f"  - [Релиз {tag}](https://sourcecraft.dev/{sc}/releases/{tag})", ""]
     text = "\n".join(body)
 
-    out = into / f"lab{num}.md"
+    out = into / f"{kind}{num}.md"
     out.write_text(text)
     return {"created": None, "path": str(out), "text": text, "tag": tag,
             "repo": str(repo), "lab": str(lab),

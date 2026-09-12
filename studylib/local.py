@@ -55,9 +55,19 @@ def tuis_dir(code):
     return ROOT / code / "tuis"
 
 
-def videos(code, num):
-    """Состояние <код>/tuis/labNN.env — ссылок на скринкасты."""
-    f = tuis_dir(code) / f"lab{num}.env"
+WORK_DIRS = {"lab": "labs", "hw": "homework"}
+
+
+def work_id(num):
+    """'01' → ('lab', '01'); 'hw1' → ('hw', '01')."""
+    num = str(num).strip().lower()
+    kind = "hw" if num.startswith("hw") else "lab"
+    return kind, num.removeprefix("hw").removeprefix("lab").zfill(2)
+
+
+def videos(code, num, kind="lab"):
+    """Состояние <код>/tuis/<kind>NN.env — ссылок на скринкасты."""
+    f = tuis_dir(code) / f"{kind}{num}.env"
     if not f.exists():
         return {"path": str(f), "exists": False, "filled": 0, "total": len(VIDEO_KEYS),
                 "missing": list(VIDEO_KEYS), "values": {}}
