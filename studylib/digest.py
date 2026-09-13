@@ -243,6 +243,8 @@ def collect(cfg, moodle, days=None, save=True, strict=False):
         "deadlines": deadlines,
         "overdue": sorted([a for a in overdue if a["submission"] in ("new", None)],
                           key=lambda x: x["due"]["ts"]),
+        "submitted": sorted([a for a in overdue if a["submission"] not in ("new", None)],
+                            key=lambda x: x["due"]["ts"]),
         "not_started": [a for a in deadlines
                         if a["source"] == "assign_api" and a["submission"] == "new"],
         "quizzes_ahead": sorted(ahead, key=lambda x: x["due"]["ts"]),
@@ -387,7 +389,8 @@ def state(cfg, moodle, days=None, with_tuis=True, save=True, strict=False):
         tuis = collect(cfg, moodle, days=days, save=save, strict=strict)
 
     by_lab = {}
-    for a in (tuis or {}).get("deadlines", []):
+    t = tuis or {}
+    for a in t.get("deadlines", []) + t.get("submitted", []):
         if a.get("lab") and a["course"].get("code"):
             by_lab[(a["course"]["code"], a["lab"])] = a
 
