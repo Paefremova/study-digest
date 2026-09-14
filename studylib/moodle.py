@@ -8,6 +8,7 @@ class Moodle:
         self.cfg = cfg
         self.base = cfg.get("TUIS_URL").rstrip("/")
         self._me = None
+        self._contents = {}
 
     # --- основа
 
@@ -50,7 +51,10 @@ class Moodle:
         return self.call("mod_assign_get_submission_status", assignid=assignid)
 
     def contents(self, courseid):
-        return self.call("core_course_get_contents", courseid=courseid)
+        # состав курса нужен и сводке, и выгрузке файлов — второй раз не ходим
+        if courseid not in self._contents:
+            self._contents[courseid] = self.call("core_course_get_contents", courseid=courseid)
+        return self._contents[courseid]
 
     def updates_since(self, courseid, since):
         return self.call("core_course_get_updates_since", courseid=courseid,
