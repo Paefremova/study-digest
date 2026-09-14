@@ -35,6 +35,8 @@ Claude Code Desktop**, которая каждое утро печатает э�
 
 ## Установка
 
+Скрипт клонирует репозиторий, спрашивает токены и кладёт симлинк `study` в `~/.local/bin`.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/setup.sh -o setup.sh && chmod +x setup.sh && ./setup.sh; rm -f setup.sh
 ```

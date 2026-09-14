@@ -144,11 +144,16 @@ else
   warn "Moodle не отвечает — проверь токен и TUIS_URL в config.env"
 fi
 
+# Команда в PATH: ~/.local/bin есть в PATH у Ubuntu по умолчанию.
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$DIGEST/study" "$HOME/.local/bin/study"
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "добавь ~/.local/bin в PATH или перезайди в оболочку" ;; esac
+
 bold $'\nДальше'
 cat <<NEXT
-  $DIGEST/study courses     готовые строки COURSE для config.env
-  $DIGEST/study digest      первый запуск сохраняет снимок состояния
-  $DIGEST/study files <код предмета> --pull    забрать материалы курса в stash/
+  study courses     готовые строки COURSE для config.env
+  study digest      первый запуск сохраняет снимок состояния
+  study files <код предмета> --pull    забрать материалы курса в stash/
 
 Ежедневная сводка: Claude Code Desktop → Code → Routines → New routine → Local,
 рабочая папка $ROOT, в Instructions — текст из $DIGEST/daily-digest-prompt.md.
