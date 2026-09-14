@@ -128,11 +128,12 @@ class Moodle:
 
     def save_submission(self, assignid, text, itemid=None):
         """Отправка ответа. Необратима: у заданий submissiondrafts=0, черновиков нет."""
-        params = {"assignmentid": assignid,
-                  "plugindata[onlinetext_editor][text]": text,
-                  # 4 = FORMAT_MARKDOWN (1 = HTML, 2 = обычный текст)
-                  "plugindata[onlinetext_editor][format]": 4,
-                  "plugindata[onlinetext_editor][itemid]": 0}
+        params = {"assignmentid": assignid}
+        if text is not None:
+            params.update({"plugindata[onlinetext_editor][text]": text,
+                           # 4 = FORMAT_MARKDOWN (1 = HTML, 2 = обычный текст)
+                           "plugindata[onlinetext_editor][format]": 4,
+                           "plugindata[onlinetext_editor][itemid]": 0})
         if itemid:
             params["plugindata[files_filemanager]"] = itemid
         return self.call("mod_assign_save_submission", **params)

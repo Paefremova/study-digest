@@ -174,18 +174,19 @@ def cmd_upload(cfg, args):
 
 def cmd_submit(cfg, args):
     m = Moodle(cfg)
-    text = pathlib.Path(args.text).read_text()
+    text = pathlib.Path(args.text).read_text() if args.text else None
     courses, _ = m.assignments()
     found = next((a for c in courses for a in c["assignments"] if a["id"] == args.assign_id), None)
     plan = {"assign_id": args.assign_id, "name": found["name"] if found else None,
             "due": moment(found.get("duedate")) if found else None,
-            "text_file": args.text, "text_chars": len(text),
+            "text_file": args.text, "text_chars": len(text or ""),
             "files_itemid": args.files, "confirmed": bool(args.confirm)}
     if not args.confirm:
         lines = ["Что будет отправлено:",
                  "  задание: {} (id {})".format(plan["name"] or "?", args.assign_id),
                  "  срок: {}".format(plan["due"]["full"] if plan["due"] else "—"),
-                 "  текст: {} ({} символов), формат Markdown".format(args.text, len(text)),
+                 "  текст: {}".format("{} ({} символов), формат Markdown".format(args.text, len(text))
+                                       if text is not None else "нет"),
                  "  вложения: {}".format(args.files or "нет"),
                  "",
                  "Отправка необратима: у заданий курса submissiondrafts=0, "
@@ -349,7 +350,7 @@ def build_parser():
 
     s = add("submit", "отправка ответа на задание (необратимо)", cmd_submit)
     s.add_argument("assign_id", type=int)
-    s.add_argument("--text", required=True, help="файл с текстом ответа")
+    s.add_argument("--text", help="файл с текстом ответа (у заданий «только файлы» не нужен)")
     s.add_argument("--files", type=int, help="itemid из study upload")
     s.add_argument("--confirm", action="store_true", help="подтвердить отправку")
 

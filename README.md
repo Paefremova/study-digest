@@ -128,7 +128,7 @@ study grades [--course id|код]           баллы и БРС
 study status <id-задания>                состояние ответа на задание
 study files <курс> [--pull] [--all]      файлы курса: что появилось, забрать в stash/
 study upload <файл>... [--itemid N]      загрузка вложений, печатает itemid
-study submit <id> --text <файл> [--files <itemid>] --confirm    отправка ответа
+study submit <id> [--text <файл>] [--files <itemid>] --confirm  отправка ответа (без --text — только файлы)
 
 study gv releases | release <тег> --title T --notes F | update <тег> --notes F | asset <id-релиза> <файл> | api <путь>
 study sc releases | release <тег> --title T --notes F | update <тег> --notes F | asset <тег> <файл> | api <путь>
