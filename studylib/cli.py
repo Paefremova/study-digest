@@ -252,13 +252,13 @@ def cmd_rt_api(cfg, args):
 
 def cmd_digest(cfg, args):
     d = digest_mod.collect(cfg, Moodle(cfg), days=args.days, save=not args.no_save)
-    return d, digest_mod.render(d)
+    return d, digest_mod.render_digest(d)
 
 
 def cmd_state(cfg, args):
     d = digest_mod.state(cfg, Moodle(cfg), days=args.days, with_tuis=not args.local,
-                         save=not args.no_save)
-    return d, digest_mod.render_state(d)
+                         save=not args.no_save, pull=args.pull)
+    return d, digest_mod.render(d)
 
 
 def cmd_answer(cfg, args):
@@ -284,12 +284,14 @@ def build_parser():
         s.set_defaults(fn=fn)
         return s
 
-    s = add("state", "сводка ТУИС и состояние работ — для ежедневной рутины", cmd_state)
+    s = add("state", "готовая ежедневная сводка: сроки, баллы, новое в курсах, состояние работ",
+            cmd_state)
     s.add_argument("--days", type=int, help="окно дедлайнов, дней")
     s.add_argument("--local", action="store_true", help="без обращения к ТУИС")
     s.add_argument("--no-save", action="store_true", help="не обновлять снимок состояния")
+    s.add_argument("--pull", action="store_true", help="забрать новые файлы курсов в stash/")
 
-    s = add("digest", "сводка по ТУИС: дедлайны, обновления, баллы", cmd_digest)
+    s = add("digest", "та же сводка, но только по ТУИС, без репозиториев", cmd_digest)
     s.add_argument("--days", type=int, help="окно дедлайнов, дней")
     s.add_argument("--no-save", action="store_true", help="не обновлять снимок состояния")
 
