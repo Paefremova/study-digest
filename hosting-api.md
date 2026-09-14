@@ -56,6 +56,7 @@ Swagger открыт: `https://api.sourcecraft.tech/sourcecraft.swagger.json`.
 | `GET /repos/{org}/{repo}/releases` | список — **объект** `{"releases": [...]}` |
 | `POST /repos/{org}/{repo}/releases` | создать релиз |
 | `POST /repos/{org}/{repo}/releases/tag/{tag}/attachments` | вложение, multipart |
+| `PATCH /repos/{org}/{repo}/releases/tag/{tag}` | изменить релиз (`title`, `release_notes`); по id — 404 |
 | `POST /orgs/{org}/repos` | создать репозиторий |
 | `GET /repos/{org}/{repo}` | сведения о репозитории |
 
