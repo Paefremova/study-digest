@@ -94,7 +94,10 @@ Moodle 4.5 на `https://esystem.rudn.ru`. Все вызовы — POST на
   `nopermissiontoviewgrades` (запись на курс истекла), `invalidrecord` (функция не входит в
   службу этого токена).
 - **Уведомления**: `core_message_get_messages` с `useridfrom=0`, `type=notifications`, `read=0`,
-  `newestfirst=1`. Сообщения «Новый вход в ваш аккаунт» отфильтровывать — иначе забивают сводку.
+  `newestfirst=1`. У каждого сообщения есть `component` и `eventtype` — по ним отсеивать
+  автоматические: `assign_due_soon`, `assign_due_digest` (напоминания о сроках),
+  `assign_notification` (квитанция о своём ответе), `newlogin` (вход в аккаунт). Фильтровать
+  по теме не стоит: она зависит от языка интерфейса.
 - **Сроки в составе курса** (`core_course_get_contents`) лежат в `dates[]`, и у каждой записи
   есть машинное поле `dataid`: `duedate` у заданий, `timeclose`/`timeopen` у тестов и выбора
   темы. Фильтровать по нему, а не по подписи `label` — подпись зависит от языка интерфейса.
