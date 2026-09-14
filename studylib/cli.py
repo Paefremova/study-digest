@@ -15,6 +15,7 @@ from . import hosting, rutube, local
 from .config import Config, StudyError
 from .fmt import moment, table
 from .moodle import Moodle
+from .snapshot import parse_since
 
 
 def course_id(cfg, value):
@@ -251,13 +252,15 @@ def cmd_rt_api(cfg, args):
 # --- сводки
 
 def cmd_digest(cfg, args):
-    d = digest_mod.collect(cfg, Moodle(cfg), days=args.days, save=not args.no_save)
+    d = digest_mod.collect(cfg, Moodle(cfg), days=args.days, save=not args.no_save,
+                           since=parse_since(args.since) if args.since else None)
     return d, digest_mod.render_digest(d)
 
 
 def cmd_state(cfg, args):
     d = digest_mod.state(cfg, Moodle(cfg), days=args.days, with_tuis=not args.local,
-                         save=not args.no_save, pull=args.pull)
+                         save=not args.no_save, pull=args.pull,
+                         since=parse_since(args.since) if args.since else None)
     return d, digest_mod.render(d)
 
 
@@ -290,10 +293,12 @@ def build_parser():
     s.add_argument("--local", action="store_true", help="без обращения к ТУИС")
     s.add_argument("--no-save", action="store_true", help="не обновлять снимок состояния")
     s.add_argument("--pull", action="store_true", help="забрать новые файлы курсов в stash/")
+    s.add_argument("--since", help="считать прошлым запуском: ГГГГ-ММ-ДД, N дней назад или never")
 
     s = add("digest", "та же сводка, но только по ТУИС, без репозиториев", cmd_digest)
     s.add_argument("--days", type=int, help="окно дедлайнов, дней")
     s.add_argument("--no-save", action="store_true", help="не обновлять снимок состояния")
+    s.add_argument("--since", help="считать прошлым запуском: ГГГГ-ММ-ДД, N дней назад или never")
 
     s = add("answer", "заготовка ответа в ТУИС по лабораторной работе", cmd_answer)
     s.add_argument("code", help="код предмета, каталог в ~/work/study")

@@ -2,13 +2,13 @@
 
 Данные и рендер разделены: `--json` отдаёт ровно то, что видит рендер, без второго обхода API.
 """
-import json
 import re
 import time
 
 from . import files, hosting, local
 from .config import StudyError
 from .fmt import md_table, moment, plain, short_name, weekday
+from .snapshot import load_state, save_state
 
 # Что считаем новостью в core_course_get_updates_since; остальное (submissions, grades,
 # answers) — своя же активность и чужие голоса, то есть шум.
@@ -67,13 +67,14 @@ def lab_number(name):
     return m.group(1).zfill(2) if m else None
 
 
-def collect(cfg, moodle, days=None, save=True, strict=False):
-    """Всё, что знает ТУИС: дедлайны, тесты, обновления, уведомления, баллы."""
+def collect(cfg, moodle, days=None, save=True, strict=False, since=None):
+    """Всё, что знает ТУИС: дедлайны, тесты, обновления, уведомления, баллы.
+
+    `since` — момент, который считать прошлым запуском (см. `snapshot.load_state`)."""
     now = int(time.time())
     days = days or cfg.days()
     errors = Errors(strict)
-    state_file = cfg.state_file()
-    state = json.loads(state_file.read_text()) if state_file.exists() else {}
+    state = load_state(cfg, since)
     since = state.get("last_run")
     known = state.get("assignments", {})
     graded = state.get("grades")  # {курс: {работа: балл}} с прошлого запуска; None — снимка ещё нет
@@ -282,13 +283,13 @@ def collect(cfg, moodle, days=None, save=True, strict=False):
     }
 
     if save:
-        state_file.write_text(json.dumps({
+        save_state(cfg, {
             "last_run": now,
             "assignments": {i: (a["due"]["ts"] if a["due"] else 0) for i, a in assigns.items()},
             "courses": {str(c["id"]): c["fullname"] for c in courses},
             "grades": {str(g["course"]["id"]): {i["name"]: i["raw"] for i in g["items"]}
                        for g in grades},
-        }, ensure_ascii=False, indent=1))
+        })
     return data
 
 
@@ -328,8 +329,7 @@ def render(d):
     now = d["now"]["ts"]
     out = ["# Учёба · %s %s" % (weekday(now), d["now"]["text"])]
     if t.get("first_run"):
-        out.append("\nПервый запуск: снимок состояния сохранён, обновления начнут "
-                   "отслеживаться со следующего раза.")
+        out.append("\nПервый запуск: обновления в курсах начнут отслеживаться со следующего раза.")
 
     news = []
     for u in t.get("updates", []):
@@ -438,12 +438,13 @@ def render_digest(d):
     return render({"now": d["now"], "days": d["days"], "tuis": d, "courses": []})
 
 
-def state(cfg, moodle, days=None, with_tuis=True, save=True, pull=False, strict=False):
+def state(cfg, moodle, days=None, with_tuis=True, save=True, pull=False, strict=False,
+          since=None):
     """Сводка ТУИС плюс состояние локальных репозиториев — всё одним объектом."""
     errors = Errors(strict)
     tuis = None
     if with_tuis:
-        tuis = collect(cfg, moodle, days=days, save=save, strict=strict)
+        tuis = collect(cfg, moodle, days=days, save=save, strict=strict, since=since)
         if pull:
             # `since` берётся из сводки: снимок состояния к этому моменту уже сдвинут на «сейчас»
             since = (tuis["since"] or {}).get("ts", 0)
