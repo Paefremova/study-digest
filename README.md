@@ -48,7 +48,7 @@ curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/
 | Moodle | профиль → «Ключи безопасности» → служба *Moodle mobile web service*; значение показывается один раз |
 | GitVerse | иконка пользователя → Настройки → Управление токенами, доступ «Репозитории» |
 | SourceCraft | Home → Access → Personal Access Tokens |
-| Rutube | `study rt login` — спросит email и пароль аккаунта (вход по VK ID не подходит, задайте пароль в настройках Rutube), сохранит только токен в `~/.config/rutube/token` |
+| Rutube | два режима на выбор. **jwt** (для аккаунтов через VK ID / Gazprom ID — `auth_type=gid`): один раз скопировать `refreshToken` из cookie браузера (rutube.ru → DevTools → Application → Cookies) и сохранить командой `study rt jwt` — дальше годовой refresh сам минтит короткий access, вход не нужен. **token** (только для аккаунтов с паролем, `auth_type=password`): `study rt login` — спросит email и пароль, сохранит токен в `~/.config/rutube/token`. Режим для `rt me`/`rt api` задаёт `--mode {auto,jwt,token}` (auto предпочитает jwt) |
 
 Свои настройки лежат в `config.env` — он создаётся при установке из
 `config.env.example` и в репозиторий не попадает. Осталось вписать в него курсы:

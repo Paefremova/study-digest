@@ -241,18 +241,23 @@ def cmd_host_api(cfg, args):
 
 def cmd_rt_login(cfg, args):
     out = rutube.Rutube(cfg).login(args.email)
-    return out, "Токен Rutube сохранён: " + out["token_file"]
+    return out, "Rutube: сохранён token (режим token): " + out["token_file"]
+
+
+def cmd_rt_jwt(cfg, args):
+    out = rutube.Rutube(cfg).save_refresh(args.refresh)
+    return out, "Rutube: сохранён refresh_token (режим jwt): " + out["refresh_file"]
 
 
 def cmd_rt_me(cfg, args):
-    rows = rutube.Rutube(cfg).me()
+    rows = rutube.Rutube(cfg, mode=args.mode).me()
     return rows, table([[str(v["id"]), v["title"] or "", "скрыто" if v["hidden"] else "",
                          v["url"] or ""] for v in rows],
-                       ["id", "название", "", "ссылка"]) or "токен работает, видео пока нет"
+                       ["id", "название", "", "ссылка"]) or "вход работает, видео пока нет"
 
 
 def cmd_rt_api(cfg, args):
-    out = rutube.Rutube(cfg).api(args.path)
+    out = rutube.Rutube(cfg, mode=args.mode).api(args.path)
     return out, json.dumps(out, ensure_ascii=False, indent=1)
 
 
@@ -382,14 +387,23 @@ def build_parser():
 
     rt = sub.add_parser("rt", help="Rutube: вход и видео")
     rts = rt.add_subparsers(dest="rtcmd", required=True, metavar="команда")
-    lg = rts.add_parser("login", help="получить токен по email и паролю (пароль не хранится)",
-                        parents=[common])
+    lg = rts.add_parser("login", help="режим token: вход по email и паролю (пароль не хранится); "
+                        "только для аккаунтов с паролем", parents=[common])
     lg.set_defaults(fn=cmd_rt_login)
     lg.add_argument("--email")
-    rts.add_parser("me", help="проверить токен: мои видео", parents=[common]).set_defaults(fn=cmd_rt_me)
+    jw = rts.add_parser("jwt", help="режим jwt: сохранить refreshToken из cookie браузера "
+                        "(VK ID / Gazprom ID)", parents=[common])
+    jw.set_defaults(fn=cmd_rt_jwt)
+    jw.add_argument("--refresh", help="сам refreshToken или строка cookie; без флага спросит скрыто")
+    me = rts.add_parser("me", help="проверить вход: мои видео", parents=[common])
+    me.set_defaults(fn=cmd_rt_me)
+    me.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto",
+                    help="какой вход использовать (по умолчанию auto)")
     ra = rts.add_parser("api", help="произвольный GET к rutube.ru/api", parents=[common])
     ra.set_defaults(fn=cmd_rt_api)
     ra.add_argument("path", help="например /video/person/")
+    ra.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto",
+                    help="какой вход использовать (по умолчанию auto)")
     return p
 
 
