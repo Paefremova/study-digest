@@ -70,7 +70,7 @@ def lab_number(name):
 def collect(cfg, moodle, days=None, save=True, strict=False, since=None):
     """Всё, что знает ТУИС: дедлайны, тесты, обновления, уведомления, баллы.
 
-    `since` — момент, который считать прошлым запуском (см. `snapshot.load_state`)."""
+    `since` — что считать прошлым запуском, строка `--since` (см. `snapshot.load_state`)."""
     now = int(time.time())
     days = days or cfg.days()
     errors = Errors(strict)

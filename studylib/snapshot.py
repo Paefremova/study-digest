@@ -17,27 +17,29 @@ def history_dir(cfg):
     return cfg.state_file().with_name("state")
 
 
-def parse_since(text):
-    """`--since`: `never` — как будто запусков не было; число — дней назад;
-    `ГГГГ-ММ-ДД` — с полуночи этого дня. Возвращает unix-время или 0."""
-    if text == "never":
-        return 0
-    if re.fullmatch(r"\d+", text):
-        return int(time.time()) - int(text) * 86400
-    try:
-        return int(datetime.datetime.strptime(text, "%Y-%m-%d").timestamp())
-    except ValueError:
-        raise StudyError("config", f"--since: ожидается never, число дней или ГГГГ-ММ-ДД, а не «{text}»")
-
-
 def load_state(cfg, since=None):
-    """Состояние на момент `since`: ближайший снимок не позже него; снимка нет — текущий
-    файл с точкой отсчёта `since`. `since=None` — просто текущий файл, `0` — пусто."""
+    """Состояние, которое считать прошлым запуском, по значению `--since`:
+
+    None — текущий `state.json`;
+    `never` — снимка нет, как при первом запуске: обновления не отслеживаются;
+    `all` — пустой снимок с точкой отсчёта в начале времён: новым считается всё;
+    число — столько дней назад; `ГГГГ-ММ-ДД` — с полуночи этого дня: ближайший снимок
+    не позже этой точки, а пока истории нет — текущий файл с ней как точкой отсчёта."""
     current = cfg.state_file()
     if since is None:
         return json.loads(current.read_text()) if current.exists() else {}
-    if not since:
+    if since == "never":
         return {}
+    if since == "all":
+        return {"last_run": 1, "grades": {}}
+    if re.fullmatch(r"\d+", since):
+        since = int(time.time()) - int(since) * 86400
+    else:
+        try:
+            since = int(datetime.datetime.strptime(since, "%Y-%m-%d").timestamp())
+        except ValueError:
+            raise StudyError("config", "--since: ожидается ГГГГ-ММ-ДД, число дней, never или all, "
+                                       f"а не «{since}»")
     day = time.strftime("%Y-%m-%d", time.localtime(since))
     older = sorted(p for p in history_dir(cfg).glob("????-??-??.json") if p.stem <= day)
     if older:
