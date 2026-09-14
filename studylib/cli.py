@@ -220,6 +220,13 @@ def cmd_host_release(cfg, args):
     return out, "Релиз {} создан: {}".format(out["tag"], out["url"])
 
 
+def cmd_host_update(cfg, args):
+    c = client(cfg, args.host)
+    notes = pathlib.Path(args.notes).read_text() if args.notes else None
+    out = c.update(args.tag, title=args.title, notes=notes)
+    return out, "Релиз {} обновлён: {}".format(out["tag"], out["url"])
+
+
 def cmd_host_asset(cfg, args):
     c = client(cfg, args.host)
     out = c.asset(args.release, args.file, args.name)
@@ -358,6 +365,11 @@ def build_parser():
         r.add_argument("--title", required=True)
         r.add_argument("--notes", required=True, help="файл с описанием")
         r.add_argument("--sha", help="GitVerse: полный SHA; по умолчанию из тега")
+        u = hs.add_parser("update", help="изменить название или описание релиза", parents=[common])
+        u.set_defaults(fn=cmd_host_update)
+        u.add_argument("tag")
+        u.add_argument("--title")
+        u.add_argument("--notes", help="файл с описанием")
         a = hs.add_parser("asset", help="загрузить файл в релиз", parents=[common])
         a.set_defaults(fn=cmd_host_asset)
         a.add_argument("release", help="GitVerse: id релиза, SourceCraft: тег")

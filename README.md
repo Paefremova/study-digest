@@ -130,8 +130,8 @@ study files <курс> [--pull] [--all]      файлы курса: что по�
 study upload <файл>... [--itemid N]      загрузка вложений, печатает itemid
 study submit <id> --text <файл> [--files <itemid>] --confirm    отправка ответа
 
-study gv releases | release <тег> --title T --notes F | asset <id-релиза> <файл> | api <путь>
-study sc releases | release <тег> --title T --notes F | asset <тег> <файл> | api <путь>
+study gv releases | release <тег> --title T --notes F | update <тег> --notes F | asset <id-релиза> <файл> | api <путь>
+study sc releases | release <тег> --title T --notes F | update <тег> --notes F | asset <тег> <файл> | api <путь>
 ```
 
 `--json` перед командой или после неё печатает те же данные машиночитаемо — ровно то,

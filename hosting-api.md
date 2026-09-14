@@ -87,3 +87,12 @@ Swagger открыт: `https://api.sourcecraft.tech/sourcecraft.swagger.json`.
   (`releases`, `release`, `asset`, `web_url`), а различия спрятаны внутри классов.
 - Порядок выпуска релиза описан в `../CLAUDE.md`, раздел «Порядок сдачи лабораторной работы»:
   сначала отчёт и презентация, потом тег через git-flow, и только потом релиз с файлами.
+
+## Описания релизов и ссылки
+
+Оба хостинга принимают Markdown. Правка выпущенного релиза: GitVerse — `PATCH /repos/{o}/{r}/releases/{id}`
+(`name`, `body`), SourceCraft — `PATCH /repos/{org}/{repo}/releases/tag/{tag}` (`title`, `release_notes`).
+В CLI это `study gv update <тег> --notes F --title T` и `study sc update …`. SourceCraft-клиент подменяет
+в заметках `https://gitverse.ru/<gv-repo>` на `https://sourcecraft.dev/<sc-repo>` (метод `localize`):
+адрес коммита `/commit/<sha>` на обоих хостингах одинаков, а `compare` GitVerse не поддерживает —
+см. `lab-submission.md`, раздел «Ссылки в CHANGELOG».

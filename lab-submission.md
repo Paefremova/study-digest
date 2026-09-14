@@ -19,7 +19,7 @@
 5. **Коммит исходников**: `docs(labNN): add report and presentation`.
 6. **Архив исходников**: zip с `.qmd`, `image/`, `bib/`.
 7. **Релиз**: поднять `version` в `package.json` (иначе `standard-changelog` не добавит
-   новый раздел), `git flow release start X.Y.Z` → `standard-changelog` →
+   новый раздел), `git flow release start X.Y.Z` → `standard-changelog -c .changelogrc.json` →
    коммит `chore(site): release X.Y.Z` → `git flow release finish -s` →
    `git push origin/src master develop --tags` → копия `CHANGELOG.md` в `release/`.
 8. **Файлы релиза** на обоих хостингах: отчёт `md`/`docx`/`pdf`, презентация
@@ -43,3 +43,15 @@ start X.Y.Z+1` от `master` → исправление коммитом `fix(la
 `standard-changelog` → `chore(site): release X.Y.Z+1` → `git flow hotfix finish -s` →
 push обеих веток и тега → новый релиз с полным набором файлов на обоих хостингах.
 Старый релиз не удалять.
+
+**Ссылки в CHANGELOG.** `standard-changelog` (пресет angular) рисует ссылки в стиле GitHub:
+`/commits/<sha>` и заголовок-сравнение `/compare/vA...vB`. На GitVerse страница коммита —
+`/commit/<sha>`, сравнения тегов нет (`/compare` требует входа и берёт только ветки);
+на SourceCraft коммит — тоже `/commit/<sha>`, сравнение релизов —
+`/releases/<тег>/compare?base=<предыдущий>`. Поэтому в корне репозитория курса лежит
+`.changelogrc.json` (`{"commit": "commit", "linkCompare": false}`): заголовок без ссылки,
+коммиты по `/commit/`. Полную перегенерацию (`-r 0`) в git-flow делать нельзя — теги стоят
+на merge-коммитах, которые пресет отбрасывает, и вывод пуст; правится только новый раздел.
+`study sc release` и `study sc update` подменяют в заметках `gitverse.ru/<owner>` на
+`sourcecraft.dev/<org>`, поэтому один CHANGELOG подходит обоим хостингам.
+`study gv update <тег> --notes F` / `study sc update …` — правка описания выпущенного релиза.

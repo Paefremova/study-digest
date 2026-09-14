@@ -73,6 +73,15 @@ class GitVerse(Hosting):
                                   "body": notes, "draft": False, "prerelease": False})
         return {"id": out["id"], "tag": out["tag_name"], "url": self.web_url(out["tag_name"])}
 
+    def update(self, tag, title=None, notes=None):
+        """Правка названия и описания выпущенного релиза, адресуется по id."""
+        ids = {r["tag"]: r["id"] for r in self.releases()}
+        if tag not in ids:
+            raise StudyError(self.source, f"релиза {tag} нет")
+        body = {k: v for k, v in (("name", title), ("body", notes)) if v}
+        self.api(f"/repos/{self.repo}/releases/{ids[tag]}", method="PATCH", json_body=body)
+        return {"id": ids[tag], "tag": tag, "url": self.web_url(tag)}
+
     def asset(self, release_id, path, name=None):
         """Имя — query-параметром, файл — в поле attachment. .qmd и .html отвергаются."""
         fname, data, ctype = self._file(path)
@@ -104,16 +113,30 @@ class SourceCraft(Hosting):
                  "status": r.get("status"), "assets": len(r.get("assets") or []),
                  "url": self.web_url(r.get("tag"))} for r in out.get("releases", [])]
 
+    def localize(self, notes):
+        """CHANGELOG ссылается на GitVerse (repository в package.json); в заметках
+        SourceCraft подменяем хост и владельца — путь /commit/<sha> у обоих один."""
+        gv = self.path and local.repo_from_remote(self.path, "origin", "gitverse.ru")
+        if gv:
+            notes = notes.replace(f"https://gitverse.ru/{gv}", f"https://sourcecraft.dev/{self.repo}")
+        return notes
+
     def release(self, tag, title, notes, sha=None, branch=None):
         """REST вместо CLI src. target_branch заставляет SourceCraft создать тег самому
         и даёт 409 BranchAlreadyExists, если тег уже запушен; по нашему порядку тег
         всегда есть, поэтому поле передаём только по явной просьбе."""
-        body = {"tag": tag, "title": title, "release_notes": notes, "publish": True}
+        body = {"tag": tag, "title": title, "release_notes": self.localize(notes), "publish": True}
         if branch:
             body["target_branch"] = branch
         out = self.api(f"/repos/{self.repo}/releases", json_body=body) or {}
         return {"tag": out.get("tag", tag), "status": out.get("status"),
                 "url": self.web_url(tag)}
+
+    def update(self, tag, title=None, notes=None):
+        """Правка описания: только по тегу, по id SourceCraft отвечает 404."""
+        body = {k: v for k, v in (("title", title), ("release_notes", notes and self.localize(notes))) if v}
+        self.api(f"/repos/{self.repo}/releases/tag/{tag}", method="PATCH", json_body=body)
+        return {"tag": tag, "url": self.web_url(tag)}
 
     def asset(self, tag, path, name=None):
         """Файл грузится строго в поле file, ограничений по расширению нет."""
