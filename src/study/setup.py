@@ -262,7 +262,7 @@ def dirs(s, cfg):
 
 def check(s, m):
     try:
-        s.ok("Moodle отвечает: " + m.me()["fullname"])
+        s.ok("Moodle отвечает: " + m.me()["fullname"].strip())
     except StudyError:
         s.warn("Moodle не отвечает: проверь токен и TUIS_URL в config.env")
     s.ok("команда study: " + link_command())

@@ -160,6 +160,7 @@ def config(s, digest):
 def handoff(digest, log):
     """Остальные шаги — у `study setup`; сделанные шаги и их результаты — в STUDY_SETUP."""
     env = {**os.environ, "STUDY_SETUP": json.dumps({"steps": STEPS[:2], "log": log})}
+    sys.stdout.flush()   # в пайпе наш буфер иначе выйдет после вывода подпроцесса
     return subprocess.call([sys.executable, str(digest / "study"), "setup"], env=env)
 
 
