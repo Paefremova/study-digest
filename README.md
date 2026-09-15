@@ -41,10 +41,10 @@ Claude Code Desktop**, которая каждое утро печатает э�
 curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/setup.sh -o setup.sh && chmod +x setup.sh && ./setup.sh; rm -f setup.sh
 ```
 
-Где взять токены. Всё, включая секреты, хранится в `digest/config.env` (он в `.gitignore`,
+Где взять токены. Всё, включая секреты, хранится в `.digest/config.env` (он в `.gitignore`,
 права 600; на GitHub уходит только `config.env.example`). Статические токены — строками
 `TUIS_TOKEN=…`, `GITVERSE_TOKEN=…`, `SOURCECRAFT_TOKEN=…`; их спрашивает `setup.sh`. Токены
-rutube (`refresh`/`access`) инструмент ведёт сам в `digest/.secrets/` (тоже вне git).
+rutube (`refresh`/`access`) инструмент ведёт сам в `.digest/.secrets/` (тоже вне git).
 
 | Сервис | Где |
 |--------|-----|
@@ -59,9 +59,9 @@ rutube (`refresh`/`access`) инструмент ведёт сам в `digest/.s
 (они уходят в `COURSE_IGNORE`), и имена локальных папок (строки `CODE`).
 
 ```bash
-digest/study courses          # список курсов + текущий COURSE_IGNORE
-digest/study courses --setup  # перенастроить игнор и папки
-digest/study digest           # первый запуск сохраняет снимок состояния
+.digest/study courses          # список курсов + текущий COURSE_IGNORE
+.digest/study courses --setup  # перенастроить игнор и папки
+.digest/study digest           # первый запуск сохраняет снимок состояния
 ```
 
 ## Ежедневная сводка в Claude Code
@@ -93,7 +93,7 @@ digest/study digest           # первый запуск сохраняет с�
 команды идут через `wsl.exe`:
 
 ```bash
-MSYS_NO_PATHCONV=1 wsl.exe -d ubuntu -- bash -c '~/work/study/digest/study state --pull'
+MSYS_NO_PATHCONV=1 wsl.exe -d ubuntu -- bash -c '~/work/study/.digest/study state --pull'
 ```
 
 - `MSYS_NO_PATHCONV=1` обязателен: без него Git Bash подставляет windows-путь вместо
@@ -232,9 +232,9 @@ RUTUBE_DEFENSE=       VK_DEFENSE=
 не пишет, а только называет появившиеся файлы; загрузка — отдельной командой:
 
 ```bash
-digest/study files <код предмета>          # что появилось с прошлого запуска сводки
-digest/study files <код предмета> --all    # весь список файлов курса
-digest/study files <код предмета> --pull   # скачать новые в stash/
+.digest/study files <код предмета>          # что появилось с прошлого запуска сводки
+.digest/study files <код предмета> --all    # весь список файлов курса
+.digest/study files <код предмета> --pull   # скачать новые в stash/
 ```
 
 Загружаются документы (`.pdf`, `.doc(x)`, `.md`, `.tex`, архивы и подобные) размером до

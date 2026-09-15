@@ -72,7 +72,7 @@ if [ -x "$HERE/study" ]; then
   ok "уже на месте: $DIGEST"
 else
   # Скрипт скачали отдельно — спрашиваем, куда ставить, и проверяем путь.
-  default=$HOME/study/digest
+  default=$HOME/study/.digest
   target=$default
   while [ -t 0 ]; do
     read -r -p "  куда установить [$default]: " target
@@ -149,7 +149,7 @@ fi
 # --- 4. Каталоги
 
 bold $'\nКаталоги'
-state=$(expand "$(cfg DIGEST_STATE "~/.config/tuis/state.json")")
+state=$(expand "$(cfg DIGEST_STATE ".state.json")")
 mkdir -p "$(dirname "$state")"
 ok "$(dirname "$state") — снимок состояния сводки"
 

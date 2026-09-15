@@ -22,7 +22,7 @@ DEFAULTS = {
     "RUTUBE_ACCESS_FILE": ".secrets/rutube-access",
     "DIGEST_DAYS": "21",
     "DIGEST_ACTIVE_DAYS": "60",
-    "DIGEST_STATE": "~/.config/tuis/state.json",
+    "DIGEST_STATE": ".state.json",
     "GV_REPO": "",
     "SC_REPO": "",
 }
@@ -155,24 +155,18 @@ class Config:
                 return cid
         return None
 
-    def code_for(self, cid, shortname=None):
-        """Имя локальной папки: карта CODE → латинский префикс shortname, подтверждённый папкой."""
-        if cid in self._codemap:
-            return self._codemap[cid]
-        slug = (shortname or "").split("__")[0].strip()
-        if slug and re.fullmatch(r"[A-Za-z0-9-]+", slug) and (ROOT / slug).is_dir():
-            return slug
-        return None
+    def code_for(self, cid):
+        """Имя локальной папки курса из карты CODE (иначе None)."""
+        return self._codemap.get(cid)
 
     def track(self, courses):
-        """Из списка moodle.courses() (id/shortname/fullname) — отслеживаемые Course минус игнор."""
+        """Из списка moodle.courses() (id/fullname) — отслеживаемые Course минус игнор."""
         out = []
         for c in courses:
             cid = c.get("id")
             if cid in self._ignore:
                 continue
-            code = self.code_for(cid, c.get("shortname"))
-            out.append(Course(cid, code or "-", c.get("fullname") or ""))
+            out.append(Course(cid, self.code_for(cid) or "-", c.get("fullname") or ""))
         return out
 
     def days(self):

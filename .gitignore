@@ -6,3 +6,7 @@ config.env
 
 # Локальные токены (rutube refresh/access)
 .secrets/
+
+# Снимок состояния сводки (внутри digest)
+.state.json
+state/

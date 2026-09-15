@@ -77,7 +77,7 @@ def _course_rows(cfg, m, include_hidden=False):
     for c in m.courses(include_hidden=include_hidden):
         la = c.get("lastaccess") or 0
         rows.append({"id": c["id"], "shortname": c.get("shortname"), "title": c["fullname"],
-                     "lastaccess": la, "code": cfg.code_for(c["id"], c.get("shortname")),
+                     "lastaccess": la, "code": cfg.code_for(c["id"]),
                      "ignored": c["id"] in ignore, "stale": not la or (now - la) > win})
     return rows
 
@@ -144,23 +144,15 @@ def cmd_courses(cfg, args):
             if tok.isdigit() and int(tok) in num:
                 ignore_ids ^= {num[int(tok)]["id"]}
 
-    # папки: авто-коды уже есть; добавить/изменить парами «номер имя»
-    code_map = {r["id"]: r["code"] for r in rows if r["id"] not in ignore_ids and r["code"]}
-    print(f"\nЛокальные папки курсов (git/релизы/лабы). Определены: {', '.join(sorted(code_map.values())) or 'нет'}.")
-    print("Добавить/изменить: <номер> <имя-папки> (напр. 3 num-methods); Enter - готово.")
-    while True:
-        ans = input("> ").strip()
-        if not ans:
-            break
-        p = ans.split(None, 1)
-        if len(p) == 2 and p[0].isdigit() and int(p[0]) in num:
-            cid = num[int(p[0])]["id"]
-            if cid in ignore_ids:
-                print("  этот курс в игноре - пропущен")
-            else:
-                code_map[cid] = p[1].strip()
-        else:
-            print("  формат: номер и имя, напр. 3 num-methods")
+    # папки: по каждому отслеживаемому курсу спрашиваем имя (Enter - взять id курса)
+    print("\nИмя локальной папки для каждого курса (Enter - взять id курса из ТУИС):")
+    code_map = {}
+    for r in rows:
+        if r["id"] in ignore_ids:
+            continue
+        default = r["code"] or str(r["id"])
+        ans = input(f"  {r['title'][:50]} [{default}]: ").strip()
+        code_map[r["id"]] = ans or default
 
     _write_courses(cfg, ignore_ids, code_map)
     for code in code_map.values():
