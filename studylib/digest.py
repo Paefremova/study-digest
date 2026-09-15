@@ -6,7 +6,7 @@ import re
 import time
 
 from . import files, hosting, local
-from .config import StudyError
+from .config import Course, StudyError
 from .fmt import md_table, moment, plain, short_name, weekday
 from .snapshot import load_state, save_state
 
@@ -79,13 +79,14 @@ def collect(cfg, moodle, days=None, save=True, strict=False, since=None):
     known = state.get("assignments", {})
     graded = state.get("grades")  # {курс: {работа: балл}} с прошлого запуска; None — снимка ещё нет
 
-    watch = {c.id: c for c in cfg.courses()}
+    mc = moodle.courses()
+    watch = {c.id: c for c in (cfg.courses() or cfg.track(mc))}
     events = []
     with errors.soft("календарь"):
         events = moodle.calendar(now - 7 * 86400, now + 120 * 86400)
     active = {(e.get("course") or {}).get("id") for e in events} - {None}
 
-    courses = [c for c in moodle.courses() if c["id"] in (watch or active)]
+    courses = [c for c in mc if c["id"] in (watch or active)]
     cmap = {c["id"]: (watch[c["id"]].title if c["id"] in watch else c["fullname"])
             for c in courses}
     codes = {c["id"]: (watch[c["id"]].code if c["id"] in watch else None) for c in courses}
@@ -442,13 +443,16 @@ def state(cfg, moodle, days=None, with_tuis=True, save=True, pull=False, strict=
           since=None):
     """Сводка ТУИС плюс состояние локальных репозиториев — всё одним объектом."""
     errors = Errors(strict)
+    tracked = list(cfg.courses())
     tuis = None
     if with_tuis:
         tuis = collect(cfg, moodle, days=days, save=save, strict=strict, since=since)
+        if not tracked:   # авто-режим: берём набор из сводки (записи минус игнор)
+            tracked = [Course(c["id"], c["code"] or "-", c["title"]) for c in tuis.get("courses", [])]
         if pull:
             # `since` берётся из сводки: снимок состояния к этому моменту уже сдвинут на «сейчас»
             since = (tuis["since"] or {}).get("ts", 0)
-            for course in cfg.courses():
+            for course in tracked:
                 todo = [u for u in tuis["updates"] if u["files"] and u["course"]["id"] == course.id]
                 if not todo or not course.code:
                     continue
@@ -466,7 +470,7 @@ def state(cfg, moodle, days=None, with_tuis=True, save=True, pull=False, strict=
             by_lab[(a["course"]["code"], a["lab"])] = a
 
     courses = []
-    for course in cfg.courses():
+    for course in tracked:
         if not course.code:
             continue
         repo = local.course_repo(course.code)

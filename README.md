@@ -41,11 +41,10 @@ Claude Code Desktop**, которая каждое утро печатает э�
 curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/setup.sh -o setup.sh && chmod +x setup.sh && ./setup.sh; rm -f setup.sh
 ```
 
-Где взять токены. Статические (Moodle, GitVerse, SourceCraft) кладутся в один файл
-`~/.config/study/secrets.env` (права 600, вне репозитория) строками `TUIS_TOKEN=…`,
-`GITVERSE_TOKEN=…`, `SOURCECRAFT_TOKEN=…`; при отсутствии ключа берётся персональный
-файл `~/.config/<сервис>/token` (запасной вариант). Токены rutube (`refresh`/`access`)
-инструмент ведёт сам в `~/.config/rutube/`.
+Где взять токены. Всё, включая секреты, хранится в `digest/config.env` (он в `.gitignore`,
+права 600; на GitHub уходит только `config.env.example`). Статические токены — строками
+`TUIS_TOKEN=…`, `GITVERSE_TOKEN=…`, `SOURCECRAFT_TOKEN=…`; их спрашивает `setup.sh`. Токены
+rutube (`refresh`/`access`) инструмент ведёт сам в `digest/.secrets/` (тоже вне git).
 
 | Сервис | Где |
 |--------|-----|
@@ -55,12 +54,14 @@ curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/
 | Rutube | два режима на выбор. **jwt** (для аккаунтов через VK ID / Gazprom ID — `auth_type=gid`): один раз скопировать `refreshToken` из cookie браузера (rutube.ru → DevTools → Application → Cookies) и сохранить командой `study rt jwt` — дальше годовой refresh сам минтит короткий access, вход не нужен. **token** (только для аккаунтов с паролем, `auth_type=password`): `study rt login` — спросит email и пароль, сохранит токен в `~/.config/rutube/token`. Режим для `rt me`/`rt api` задаёт `--mode {auto,jwt,token}` (auto предпочитает jwt) |
 
 Свои настройки лежат в `config.env` — он создаётся при установке из
-`config.env.example` и в репозиторий не попадает. Осталось вписать в него курсы:
-готовые строки печатает сама программа, нужные перенести и подставить коды каталогов.
+`config.env.example` и в репозиторий не попадает. Курсы настраивает `setup.sh`
+(или `study courses --setup`): берёт список из ТУИС, спрашивает, какие не отслеживать
+(они уходят в `COURSE_IGNORE`), и имена локальных папок (строки `CODE`).
 
 ```bash
-digest/study courses
-digest/study digest      # первый запуск сохраняет снимок состояния
+digest/study courses          # список курсов + текущий COURSE_IGNORE
+digest/study courses --setup  # перенастроить игнор и папки
+digest/study digest           # первый запуск сохраняет снимок состояния
 ```
 
 ## Ежедневная сводка в Claude Code
@@ -125,7 +126,7 @@ study digest [--days N] [--no-save] [--since X]                     та же с
 study answer <код предмета> <NN> [--tag T]     заготовка ответа по лабораторной
 
 study me                                 владелец токена и число доступных функций
-study courses [--all]                    курсы готовыми строками для config.env
+study courses [--all] [--setup]          курсы: список / интерактивная настройка игнора и папок
 study functions [подстрока]              функции, доступные токену
 study call <функция> [ключ=значение ...] произвольный вызов
 study assigns [--course id|код]          задания и сроки
@@ -177,18 +178,20 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 
 | Задача | Что править |
 |--------|-------------|
-| другой набор курсов в новом семестре | строки `COURSE` |
-| адрес Moodle, пути к токенам, глубина окна дедлайнов | `TUIS_URL`, `*_TOKEN_FILE`, `DIGEST_DAYS` |
+| другой набор курсов в новом семестре | `study courses --setup` (правит `COURSE_IGNORE`/`CODE`) |
+| адрес Moodle, токены, глубина окна дедлайнов | `TUIS_URL`, `TUIS_TOKEN` и др., `DIGEST_DAYS` |
 | другой вид сводки | `studylib/digest.py`, функция `render` |
 | другие шаги проверки | `daily-digest-prompt.md` |
 | новые источники данных | `studylib/moodle.py` + `studylib/digest.py` + запись в `tuis-api.md` |
 | новый хостинг кода | класс в `studylib/hosting.py` + запись в `hosting-api.md` |
 
-Строка курса: `COURSE <id> <код каталога или -> <название>`. Курс без каталога
-(`-`) попадает в сводку, но локального состояния у него нет.
+Отслеживаются все курсы из ТУИС, кроме перечисленных в `COURSE_IGNORE` (id через пробел).
+Локальную папку курса задаёт `CODE <id> <имя папки>`; для курсов с латинским shortname,
+совпадающим с именем папки, она выводится сама. Курс без папки попадает в сводку по срокам,
+но локального состояния (git/релизы/лабы) у него нет.
 
-Без строк `COURSE` курсы определяются по календарю, но менее надёжно: курс, у которого
-все задания скрыты ограничением доступа, в календарь не попадает. Если срок появится
+Если игнор пуст и старых строк `COURSE` нет, курсы определяются по календарю, менее надёжно:
+курс, у которого все задания скрыты ограничением доступа, в календарь не попадает. Если срок появится
 у курса вне списка, сводка сообщит об этом отдельным разделом.
 
 ## Ответ на лабораторную и ссылки на записи

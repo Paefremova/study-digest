@@ -26,11 +26,29 @@ cfg() {
   printf '%s' "${value:-$default}"
 }
 
-# Путь из настройки: относительный отсчитывается от корня учебной директории.
+# Путь из настройки: относительный отсчитывается от каталога digest/ (как в config.py).
 expand() {
   local path
   path=$(untilde "$1")
-  case $path in /*) printf '%s' "$path" ;; *) printf '%s' "$ROOT/$path" ;; esac
+  case $path in /*) printf '%s' "$path" ;; *) printf '%s' "$DIGEST/$path" ;; esac
+}
+
+# Записать KEY=значение в config.env (заменить существующую строку или добавить), права 600.
+set_cfg() {
+  local key=$1 value=$2 tmp
+  tmp=$(mktemp)
+  grep -vE "^$key=" "$CONFIG" > "$tmp" 2>/dev/null || true
+  printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  chmod 600 "$tmp"; mv "$tmp" "$CONFIG"
+}
+
+# Открыть ссылку в браузере (WSL/Linux), не роняя установку.
+open_url() {
+  local url=$1
+  if command -v wslview >/dev/null 2>&1; then wslview "$url" >/dev/null 2>&1 &
+  elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$url" >/dev/null 2>&1 &
+  elif command -v explorer.exe >/dev/null 2>&1; then explorer.exe "$url" >/dev/null 2>&1 &
+  else return 1; fi
 }
 
 # --- 1. Зависимости
@@ -75,20 +93,25 @@ ROOT=$(dirname "$DIGEST")
 CONFIG=$DIGEST/config.env
 if [ ! -f "$CONFIG" ]; then
   cp "$DIGEST/config.env.example" "$CONFIG"
-  ok "создан config.env из примера — курсы вписать после установки"
+  chmod 600 "$CONFIG"
+  ok "создан config.env из примера (права 600 — в нём хранятся токены)"
 fi
+chmod 600 "$CONFIG" 2>/dev/null || true
 ok "корень учебной директории: $ROOT"
 
 # --- 3. Токены
 
 ask_token() {
-  local key=$1 name=$2 where=$3 path token answer
-  path=$(expand "$(cfg "$key")")
+  local key=$1 name=$2 where=$3 url=${4:-} token answer
   printf '\n%s\n' "$name"
-  printf '  файл: %s\n' "$path"
   printf '  где взять: %s\n' "$where"
+  if [ -n "$url" ]; then
+    printf '  ссылка: %s\n' "$url"
+    read -r -p "  открыть в браузере? [Y/n] " answer
+    case ${answer:-y} in [yY]*) open_url "$url" && ok "открываю в браузере" || warn "не открылось — перейди по ссылке вручную" ;; esac
+  fi
 
-  if [ -s "$path" ]; then
+  if [ -n "$(cfg "$key")" ]; then
     read -r -p "  токен уже есть, заменить? [y/N] " answer
     case ${answer:-n} in [yY]*) ;; *) ok "оставлен прежний"; return 0 ;; esac
   fi
@@ -100,22 +123,20 @@ ask_token() {
     return 0
   fi
 
-  mkdir -p "$(dirname "$path")"
-  chmod 700 "$(dirname "$path")"
-  (umask 077; printf '%s' "$token" > "$path")
-  chmod 600 "$path"
-  ok "сохранён, права $(stat -c '%a' "$path")"
+  set_cfg "$key" "$token"
+  ok "сохранён в config.env (права $(stat -c '%a' "$CONFIG"))"
 }
 
 bold $'\nТокены'
 if [ ! -t 0 ]; then
   warn "нет терминала, ввод токенов пропущен"
 else
-  ask_token TUIS_TOKEN_FILE "Moodle" \
-    "профиль → «Ключи безопасности» → служба Moodle mobile web service"
-  ask_token GITVERSE_TOKEN_FILE "GitVerse" \
+  ask_token TUIS_TOKEN "Moodle (нужен для сводки)" \
+    "профиль → «Ключи безопасности» → служба Moodle mobile web service" \
+    "$(cfg TUIS_URL https://esystem.rudn.ru)/user/managetoken.php"
+  ask_token GITVERSE_TOKEN "GitVerse (необязательно)" \
     "иконка пользователя → Настройки → Управление токенами, доступ «Репозитории»"
-  ask_token SOURCECRAFT_TOKEN_FILE "SourceCraft" \
+  ask_token SOURCECRAFT_TOKEN "SourceCraft (необязательно)" \
     "Home → Access → Personal Access Tokens"
 fi
 
@@ -127,13 +148,13 @@ mkdir -p "$(dirname "$state")"
 ok "$(dirname "$state") — снимок состояния сводки"
 
 courses=0
-while read -r _ _ code title; do
-  case ${code:-} in ""|"-") continue ;; esac
+while read -r _ _ code; do
+  case ${code:-} in "") continue ;; esac
   mkdir -p "$ROOT/$code/stash" "$ROOT/$code/tuis"
-  ok "$ROOT/$code/{stash,tuis} — $title"
+  ok "$ROOT/$code/{stash,tuis}"
   courses=$((courses + 1))
-done < <(grep -E '^COURSE[[:space:]]+[0-9]+' "$CONFIG" 2>/dev/null || true)
-[ "$courses" -gt 0 ] || warn "в config.env нет строк COURSE с кодом каталога"
+done < <(grep -E '^CODE[[:space:]]+[0-9]+' "$CONFIG" 2>/dev/null || true)
+[ "$courses" -gt 0 ] || warn "в config.env нет строк CODE (папки курсов задаст шаг «Курсы»)"
 
 # --- 5. Проверка
 
@@ -149,10 +170,23 @@ mkdir -p "$HOME/.local/bin"
 ln -sfn "$DIGEST/study" "$HOME/.local/bin/study"
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "добавь ~/.local/bin в PATH или перезайди в оболочку" ;; esac
 
+# --- 6. Курсы
+
+bold $'\nКурсы'
+if [ ! -t 0 ]; then
+  warn "нет терминала, шаг курсов пропущен — позже: study courses --setup"
+elif "$DIGEST/study" courses --setup; then
+  # папки курсов уже созданы командой выше; докрутим права config.env
+  chmod 600 "$CONFIG" 2>/dev/null || true
+else
+  warn "не удалось (нет токена Moodle?) — позже: study courses --setup"
+fi
+
 bold $'\nДальше'
 cat <<NEXT
-  study courses     готовые строки COURSE для config.env
-  study digest      первый запуск сохраняет снимок состояния
+  study courses            список курсов и текущий COURSE_IGNORE
+  study courses --setup    перенастроить: какие курсы игнорировать и папки
+  study digest             первый запуск сохраняет снимок состояния
   study files <код предмета> --pull    забрать материалы курса в stash/
 
 Ежедневная сводка: Claude Code Desktop → Code → Routines → New routine → Local,

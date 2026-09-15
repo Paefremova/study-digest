@@ -5,20 +5,23 @@
 """
 import os
 import pathlib
+import re
 
 HERE = pathlib.Path(__file__).resolve().parent.parent  # каталог digest/
 ROOT = HERE.parent                                     # ~/work/study
 
 DEFAULTS = {
     "TUIS_URL": "https://esystem.rudn.ru",
+    # Статические токены — как переменные (TUIS_TOKEN=… в config.env). Пути *_TOKEN_FILE —
+    # запасной вариант чтения из файла, если значения в config.env нет.
     "TUIS_TOKEN_FILE": "~/.config/tuis/token",
     "GITVERSE_TOKEN_FILE": "~/.config/gitverse/token",
     "SOURCECRAFT_TOKEN_FILE": "~/.config/sourcecraft/token",
-    "RUTUBE_TOKEN_FILE": "~/.config/rutube/token",
-    "RUTUBE_REFRESH_FILE": "~/.config/rutube/refresh",
-    "RUTUBE_ACCESS_FILE": "~/.config/rutube/access",
-    "SECRETS_FILE": "~/.config/study/secrets.env",
+    "RUTUBE_TOKEN_FILE": ".secrets/rutube-token",
+    "RUTUBE_REFRESH_FILE": ".secrets/rutube-refresh",
+    "RUTUBE_ACCESS_FILE": ".secrets/rutube-access",
     "DIGEST_DAYS": "21",
+    "DIGEST_ACTIVE_DAYS": "60",
     "DIGEST_STATE": "~/.config/tuis/state.json",
     "GV_REPO": "",
     "SC_REPO": "",
@@ -82,9 +85,10 @@ class Config:
     def __init__(self, path=None):
         self.path = pathlib.Path(path) if path else HERE / "config.env"
         self._values = {}
-        self._courses = []
+        self._courses = []       # старые строки COURSE (обратная совместимость)
+        self._codemap = {}       # CODE <id> <code>: id → имя локальной папки
+        self._ignore = set()     # COURSE_IGNORE: id, которые не отслеживаем
         self._tokens = {}
-        self._secrets = None
         self._read()
 
     def _read(self):
@@ -93,6 +97,15 @@ class Config:
         for line in self.path.read_text().splitlines():
             line = line.strip()
             if not line or line.startswith("#"):
+                continue
+            if line.startswith("COURSE_IGNORE"):
+                _, _, rest = line.partition("=")
+                self._ignore.update(int(x) for x in re.findall(r"\d+", rest))
+                continue
+            if line.startswith("CODE"):
+                parts = line.split(None, 2)
+                if len(parts) == 3 and parts[1].isdigit():
+                    self._codemap[int(parts[1])] = parts[2].strip()
                 continue
             if line.startswith("COURSE"):
                 parts = line.split(None, 3)
@@ -112,34 +125,19 @@ class Config:
         return value if value else ("" if default is None else default)
 
     def path_of(self, key):
-        """Путь из настройки: тильда разворачивается, относительный — от корня учебной директории."""
+        """Путь из настройки: тильда разворачивается, относительный — от каталога digest/."""
         p = pathlib.Path(self.get(key)).expanduser()
-        return p if p.is_absolute() else ROOT / p
-
-    def _secret(self, name):
-        """Значение из общего secrets.env или переменной окружения (для статических токенов)."""
-        if os.environ.get(name):
-            return os.environ[name]
-        if self._secrets is None:
-            self._secrets = {}
-            p = self.path_of("SECRETS_FILE")
-            if p.exists():
-                for line in p.read_text().splitlines():
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        k, _, v = line.partition("=")
-                        self._secrets[k.strip()] = v.strip()
-        return self._secrets.get(name)
+        return p if p.is_absolute() else HERE / p
 
     def token(self, key):
-        """Токен лениво: сначала общий secrets.env (ключ без _FILE), иначе персональный файл."""
+        """Токен лениво: сначала значение из config.env (ключ без _FILE), иначе файл-фолбэк."""
         if key not in self._tokens:
             name = key[:-5] if key.endswith("_FILE") else key   # TUIS_TOKEN_FILE → TUIS_TOKEN
-            val = self._secret(name)
+            val = self.get(name)
             if not val:
                 f = self.path_of(key)
                 if not f.exists():
-                    raise StudyError("config", f"нет {name} в secrets.env и файла {f}", code="notoken")
+                    raise StudyError("config", f"нет {name} в config.env и файла {f}", code="notoken")
                 val = f.read_text().strip()
             self._tokens[key] = val
         return self._tokens[key]
@@ -147,8 +145,41 @@ class Config:
     def courses(self):
         return list(self._courses)
 
+    def ignore(self):
+        return set(self._ignore)
+
+    def id_for_code(self, code):
+        """Обратный поиск id по коду из карты CODE (для резолва --course офлайн)."""
+        for cid, c in self._codemap.items():
+            if c == code:
+                return cid
+        return None
+
+    def code_for(self, cid, shortname=None):
+        """Имя локальной папки: карта CODE → латинский префикс shortname, подтверждённый папкой."""
+        if cid in self._codemap:
+            return self._codemap[cid]
+        slug = (shortname or "").split("__")[0].strip()
+        if slug and re.fullmatch(r"[A-Za-z0-9-]+", slug) and (ROOT / slug).is_dir():
+            return slug
+        return None
+
+    def track(self, courses):
+        """Из списка moodle.courses() (id/shortname/fullname) — отслеживаемые Course минус игнор."""
+        out = []
+        for c in courses:
+            cid = c.get("id")
+            if cid in self._ignore:
+                continue
+            code = self.code_for(cid, c.get("shortname"))
+            out.append(Course(cid, code or "-", c.get("fullname") or ""))
+        return out
+
     def days(self):
         return int(self.get("DIGEST_DAYS"))
+
+    def active_days(self):
+        return int(self.get("DIGEST_ACTIVE_DAYS"))
 
     def state_file(self):
         return self.path_of("DIGEST_STATE")

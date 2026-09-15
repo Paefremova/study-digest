@@ -5,20 +5,22 @@
 """
 import argparse
 import json
+import os
 import pathlib
 import sys
+import time
 
 from . import answer as answer_mod
 from . import digest as digest_mod
 from . import files as files_mod
 from . import hosting, rutube, local
-from .config import Config, StudyError
+from .config import Config, Course, ROOT, StudyError
 from .fmt import moment, table
 from .moodle import Moodle
 
 
 def course_id(cfg, value):
-    """id курса из числа или кода каталога."""
+    """id курса из числа, кода каталога (карта CODE) или старой строки COURSE."""
     if not value:
         return None
     if str(value).isdigit():
@@ -26,15 +28,21 @@ def course_id(cfg, value):
     for c in cfg.courses():
         if c.code == value:
             return c.id
-    raise StudyError("config", f"нет курса с кодом {value} в config.env")
+    cid = cfg.id_for_code(value)
+    if cid:
+        return cid
+    raise StudyError("config", f"нет курса с кодом {value} (config.env: CODE/COURSE)")
 
 
 def course_of(cfg, value):
-    """Курс из config.env по коду каталога или по id."""
+    """Курс по коду каталога или id: старые COURSE, иначе карта CODE."""
     for c in cfg.courses():
         if c.code == value or str(c.id) == str(value):
             return c
-    raise StudyError("config", f"нет курса «{value}» в config.env")
+    cid = int(value) if str(value).isdigit() else cfg.id_for_code(value)
+    if cid:
+        return Course(cid, cfg.code_for(cid) or "-", "")
+    raise StudyError("config", f"нет курса «{value}» (config.env: CODE/COURSE)")
 
 
 def kv(pairs):
@@ -57,21 +65,109 @@ def cmd_me(cfg, args):
         d["fullname"], d["userid"], d["sitename"], d["release"], len(d["functions"]))
 
 
+def _seen(la):
+    return time.strftime("%Y-%m-%d", time.localtime(la)) if la else "никогда"
+
+
+def _course_rows(cfg, m, include_hidden=False):
+    now = time.time()
+    win = cfg.active_days() * 86400
+    ignore = cfg.ignore()
+    rows = []
+    for c in m.courses(include_hidden=include_hidden):
+        la = c.get("lastaccess") or 0
+        rows.append({"id": c["id"], "shortname": c.get("shortname"), "title": c["fullname"],
+                     "lastaccess": la, "code": cfg.code_for(c["id"], c.get("shortname")),
+                     "ignored": c["id"] in ignore, "stale": not la or (now - la) > win})
+    return rows
+
+
+def _course_table(rows):
+    return table([[str(r["id"]), _seen(r["lastaccess"]),
+                   "игнор" if r["ignored"] else ("старый?" if r["stale"] else ""),
+                   r["code"] or "-", r["title"]] for r in rows],
+                 ["id", "заходил", "", "папка", "курс"])
+
+
+def _write_courses(cfg, ignore_ids, code_map):
+    """Переписать в config.env строки COURSE_IGNORE и CODE (старые COURSE убрать)."""
+    keep = [ln for ln in cfg.path.read_text().splitlines()
+            if not ln.strip().split("=")[0].strip().startswith("COURSE_IGNORE")
+            and not ln.strip().startswith(("CODE ", "COURSE "))]
+    keep.append("COURSE_IGNORE=" + " ".join(str(i) for i in sorted(ignore_ids)))
+    keep += [f"CODE {cid} {code}" for cid, code in sorted(code_map.items())]
+    cfg.path.write_text("\n".join(keep) + "\n")
+    os.chmod(cfg.path, 0o600)
+
+
 def cmd_courses(cfg, args):
     m = Moodle(cfg)
-    known = {c.id: c for c in cfg.courses()}
-    rows = [{"id": c["id"], "shortname": c["shortname"], "title": c["fullname"],
-             "in_config": c["id"] in known,
-             "code": known[c["id"]].code if c["id"] in known else None}
-            for c in m.courses(include_hidden=args.all)]
-    lines = ["Готовые строки для config.env (код каталога подставить вместо -):", ""]
-    for r in rows:
-        mark = "  " if r["in_config"] else "# "
-        lines.append("{}COURSE {:<7}{:<14}{}".format(
-            mark, r["id"], r["code"] or "-", r["title"]))
-    lines.append("")
-    lines.append("Отмеченные # ещё не в config.env.")
-    return rows, "\n".join(lines)
+    rows = _course_rows(cfg, m, include_hidden=args.all)
+    if not getattr(args, "setup", False):
+        stale = " ".join(str(r["id"]) for r in rows if r["stale"] and not r["ignored"])
+        lines = [_course_table(rows), "",
+                 "Строка для config.env — курсы, которые НЕ отслеживать (кандидаты «старый?»):",
+                 f"COURSE_IGNORE={stale}", "",
+                 "Папку локального репозитория курса задать: CODE <id> <имя-папки>"]
+        return rows, "\n".join(lines)
+    # интерактивная настройка (вызывается из setup.sh): чекбоксы, переключение по номеру
+    num = {i + 1: r for i, r in enumerate(sorted(rows, key=lambda r: (r["stale"], r["title"])))}
+    ignore_ids = {r["id"] for r in rows if r["ignored"]}
+    stale_ids = {r["id"] for r in rows if r["stale"]}
+
+    def draw(prev):
+        out = ["Отметь курсы, которые НЕ отслеживать ([x] = в игнор):"]
+        header = False
+        for i, r in num.items():
+            if r["stale"] and not header:
+                out.append("   -- давно не заходил --"); header = True
+            box = "[x]" if r["id"] in ignore_ids else "[ ]"
+            out.append(f"  {i:2} {box} {_seen(r['lastaccess']):>10}  {r['title'][:58]}")
+        out.append("   номер - переключить | s - все давно не заходил | Enter/g - готово")
+        if prev and sys.stdout.isatty():
+            sys.stdout.write(f"\033[{prev + 1}A\033[J")   # стереть прошлый блок и строку ввода
+        sys.stdout.write("\n".join(out) + "\n")
+        sys.stdout.flush()
+        return len(out)
+
+    print("")
+    drawn = 0
+    while True:
+        drawn = draw(drawn)
+        ans = input("> ").strip().lower()
+        if ans in ("", "g", "готово"):
+            break
+        if ans == "s":
+            ignore_ids = ignore_ids - stale_ids if stale_ids <= ignore_ids else ignore_ids | stale_ids
+            continue
+        for tok in ans.replace(",", " ").split():
+            if tok.isdigit() and int(tok) in num:
+                ignore_ids ^= {num[int(tok)]["id"]}
+
+    # папки: авто-коды уже есть; добавить/изменить парами «номер имя»
+    code_map = {r["id"]: r["code"] for r in rows if r["id"] not in ignore_ids and r["code"]}
+    print(f"\nЛокальные папки курсов (git/релизы/лабы). Определены: {', '.join(sorted(code_map.values())) or 'нет'}.")
+    print("Добавить/изменить: <номер> <имя-папки> (напр. 3 num-methods); Enter - готово.")
+    while True:
+        ans = input("> ").strip()
+        if not ans:
+            break
+        p = ans.split(None, 1)
+        if len(p) == 2 and p[0].isdigit() and int(p[0]) in num:
+            cid = num[int(p[0])]["id"]
+            if cid in ignore_ids:
+                print("  этот курс в игноре - пропущен")
+            else:
+                code_map[cid] = p[1].strip()
+        else:
+            print("  формат: номер и имя, напр. 3 num-methods")
+
+    _write_courses(cfg, ignore_ids, code_map)
+    for code in code_map.values():
+        (ROOT / code / "stash").mkdir(parents=True, exist_ok=True)
+        (ROOT / code / "tuis").mkdir(parents=True, exist_ok=True)
+    return ({"ignore": sorted(ignore_ids), "code": code_map},
+            "config.env обновлён: COURSE_IGNORE ({}), CODE ({})".format(len(ignore_ids), len(code_map)))
 
 
 def cmd_functions(cfg, args):
@@ -393,8 +489,9 @@ def build_parser():
 
     add("me", "кто я и сколько функций доступно токену", cmd_me)
 
-    s = add("courses", "мои курсы готовыми строками для config.env", cmd_courses)
+    s = add("courses", "мои курсы: список + строка COURSE_IGNORE для config.env", cmd_courses)
     s.add_argument("--all", action="store_true", help="включая скрытые")
+    s.add_argument("--setup", action="store_true", help="интерактивно записать COURSE_IGNORE/CODE в config.env")
 
     s = add("functions", "функции, доступные токену", cmd_functions)
     s.add_argument("filter", nargs="?", help="подстрока имени")

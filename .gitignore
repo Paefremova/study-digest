@@ -3,3 +3,6 @@ __pycache__/
 
 # Личные настройки: копируется из config.env.example при установке
 config.env
+
+# Локальные токены (rutube refresh/access)
+.secrets/
