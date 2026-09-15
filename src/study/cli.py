@@ -522,11 +522,19 @@ def rt_parsers(sub):
     s.add_argument("--confirm", action="store_true", help="подтвердить загрузку (без него — план)")
 
 
+class Version(argparse.Action):
+    """`--version` зовёт git только когда спросили, а не при каждом запуске."""
+
+    def __call__(self, parser, *_):
+        print(f"study {update.version()}")
+        parser.exit()
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="study", description="ТУИС, репозитории курсов и хостинги одной командой.")
     p.add_argument("--json", action="store_true", help="машиночитаемый вывод")
-    p.add_argument("--version", action="version", version=f"study {update.version()}")
+    p.add_argument("--version", action=Version, nargs=0, help="версия по тегам git")
     sub = p.add_subparsers(dest="cmd", required=True, metavar="команда")
     tuis_parsers(sub)
     host_parsers(sub)

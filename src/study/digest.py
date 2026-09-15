@@ -463,9 +463,6 @@ def render(d):
     if t.get("outside"):
         out.append("\nКурс в COURSE_IGNORE или скрыт в ТУИС: убрать из игнора "
                    "(`study courses --setup`) или убедиться, что он неактуален.")
-    if update.note(d.get("update")):
-        out.append("\n" + "\n".join(update.note(d["update"])))
-
     todo = t.get("not_started") or []
     if todo:
         a = todo[0]
@@ -473,6 +470,9 @@ def render(d):
         out += ["\n## Предлагаю начать\n",
                 (f"**{a['short']}** · {code or a['course']['title']} · до {a['due']['text']} · "
                  f"методички: {code + '/stash/' if code else 'каталога курса нет'}")]
+    hints = update.note(d.get("update"))
+    if hints:
+        out.append("\n" + "\n".join(hints))
     return "\n".join(out)
 
 

@@ -3,6 +3,7 @@ import os
 import pathlib
 import re
 import subprocess
+import sys
 
 from .config import ROOT, StudyError
 
@@ -17,8 +18,11 @@ WORK_DIRS = {"lab": "labs", "hw": "homework"}
 
 def run(path, *args, timeout=None):
     """CompletedProcess команды git в каталоге path; None — не дождались за timeout.
-    Сетевые команды идут без запросов пароля: в задаче по расписанию терминала нет."""
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_SSH_COMMAND": "ssh -o BatchMode=yes"}
+    Без терминала (задача по расписанию) сеть идёт без запросов пароля, чтобы не зависнуть."""
+    env = dict(os.environ)
+    if not sys.stdin.isatty():
+        env.setdefault("GIT_TERMINAL_PROMPT", "0")
+        env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
     try:
         return subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True,
                               check=False, timeout=timeout, env=env)
