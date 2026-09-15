@@ -17,6 +17,7 @@ DEFAULTS = {
     "RUTUBE_TOKEN_FILE": "~/.config/rutube/token",
     "RUTUBE_REFRESH_FILE": "~/.config/rutube/refresh",
     "RUTUBE_ACCESS_FILE": "~/.config/rutube/access",
+    "SECRETS_FILE": "~/.config/study/secrets.env",
     "DIGEST_DAYS": "21",
     "DIGEST_STATE": "~/.config/tuis/state.json",
     "GV_REPO": "",
@@ -83,6 +84,7 @@ class Config:
         self._values = {}
         self._courses = []
         self._tokens = {}
+        self._secrets = None
         self._read()
 
     def _read(self):
@@ -114,13 +116,32 @@ class Config:
         p = pathlib.Path(self.get(key)).expanduser()
         return p if p.is_absolute() else ROOT / p
 
+    def _secret(self, name):
+        """Значение из общего secrets.env или переменной окружения (для статических токенов)."""
+        if os.environ.get(name):
+            return os.environ[name]
+        if self._secrets is None:
+            self._secrets = {}
+            p = self.path_of("SECRETS_FILE")
+            if p.exists():
+                for line in p.read_text().splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, _, v = line.partition("=")
+                        self._secrets[k.strip()] = v.strip()
+        return self._secrets.get(name)
+
     def token(self, key):
-        """Токен читается лениво, чтобы --help работал без токенов."""
+        """Токен лениво: сначала общий secrets.env (ключ без _FILE), иначе персональный файл."""
         if key not in self._tokens:
-            f = self.path_of(key)
-            if not f.exists():
-                raise StudyError("config", f"нет файла {f}", code="notoken")
-            self._tokens[key] = f.read_text().strip()
+            name = key[:-5] if key.endswith("_FILE") else key   # TUIS_TOKEN_FILE → TUIS_TOKEN
+            val = self._secret(name)
+            if not val:
+                f = self.path_of(key)
+                if not f.exists():
+                    raise StudyError("config", f"нет {name} в secrets.env и файла {f}", code="notoken")
+                val = f.read_text().strip()
+            self._tokens[key] = val
         return self._tokens[key]
 
     def courses(self):

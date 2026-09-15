@@ -41,7 +41,11 @@ Claude Code Desktop**, которая каждое утро печатает э�
 curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/setup.sh -o setup.sh && chmod +x setup.sh && ./setup.sh; rm -f setup.sh
 ```
 
-Где взять токены:
+Где взять токены. Статические (Moodle, GitVerse, SourceCraft) кладутся в один файл
+`~/.config/study/secrets.env` (права 600, вне репозитория) строками `TUIS_TOKEN=…`,
+`GITVERSE_TOKEN=…`, `SOURCECRAFT_TOKEN=…`; при отсутствии ключа берётся персональный
+файл `~/.config/<сервис>/token` (запасной вариант). Токены rutube (`refresh`/`access`)
+инструмент ведёт сам в `~/.config/rutube/`.
 
 | Сервис | Где |
 |--------|-----|
