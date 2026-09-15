@@ -7,7 +7,7 @@
 [![ci](https://github.com/nowherewashere/study-digest/actions/workflows/ci.yml/badge.svg)](https://github.com/nowherewashere/study-digest/actions/workflows/ci.yml)
 ![python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![deps](https://img.shields.io/badge/зависимости-только%20stdlib-success)
-![platform](https://img.shields.io/badge/платформа-Linux%20%7C%20WSL-lightgrey)
+![platform](https://img.shields.io/badge/платформа-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)
 [![license](https://img.shields.io/badge/лицензия-MIT-green)](LICENSE)
 
 ## Содержание
@@ -99,7 +99,7 @@
 
 ## Требования
 
-- Linux или WSL (из Windows задача запускается через `wsl.exe`, см. [ниже](#windows--wsl))
+- Linux, macOS или Windows 10+ (в том числе WSL)
 - `python3` 3.8+, только стандартная библиотека
 - `git`
 - токены Moodle (служба *Moodle mobile web service*), GitVerse, SourceCraft — каждый нужен
@@ -107,14 +107,32 @@
 
 ## Установка
 
+Linux, macOS:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/setup.sh -o setup.sh && chmod +x setup.sh && ./setup.sh; rm -f setup.sh
+curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/install.py -o install.py && python3 install.py; rm -f install.py
 ```
 
-`setup.sh` клонирует репозиторий в `<учебная директория>/.digest`, спрашивает токены,
-кладёт симлинк `study` в `~/.local/bin`, предлагает выбрать ИИ-оператора и настроить курсы.
-Все настройки и секреты — в `.digest/config.env` (права 600, вне git; в репозитории
-только `config.env.example`). Токены Rutube инструмент ведёт сам в `.digest/.secrets/`.
+Windows (PowerShell или Windows Terminal; в Git Bash — `winpty py install.py`, иначе
+вопросы не задаются):
+
+```powershell
+iwr https://raw.githubusercontent.com/nowherewashere/study-digest/master/install.py -OutFile install.py; py install.py; del install.py
+```
+
+Установка скачивается и запускается, а не льётся в интерпретатор через пайп: она задаёт
+вопросы. `install.py` проверяет `git` и `python3`, клонирует репозиторий в
+`<учебная директория>/.digest` и передаёт дело `study setup`: токены, каталоги, проверка
+связи с Moodle, команда `study` в PATH, выбор ИИ-оператора, настройка курсов и первое
+наполнение `stash/`. Семь экранов, итог со всеми результатами; `study setup` можно
+запускать снова — перенастроить токены или курсы.
+
+Команда `study` кладётся в `~/.local/bin`: на Linux и macOS — симлинк (macOS: добавить
+`export PATH="$HOME/.local/bin:$PATH"` в `~/.zprofile`), на Windows — `study.cmd` для cmd
+и PowerShell и sh-скрипт `study` для Git Bash; каталог добавляется в PATH пользователя
+с согласия, подействует в новом терминале. Все настройки и секреты — в `.digest/config.env`
+(на POSIX права 600; вне git, в репозитории только `config.env.example`). Токены Rutube
+инструмент ведёт сам в `.digest/.secrets/`.
 
 <details>
 <summary>Где взять токены</summary>
@@ -134,7 +152,7 @@ curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/
 study me                    # токен Moodle работает?
 study courses --setup       # какие курсы не отслеживать и как зовутся их папки
 study agent claude          # инструкция для агента в CLAUDE.md (codex, gemini, copilot — см. ниже)
-study files --pull          # материалы всех курсов в stash/ (setup.sh предлагает это сам)
+study files --pull          # материалы всех курсов в stash/ (study setup предлагает это сам)
 study digest                # первый запуск сохраняет снимок состояния
 study state --pull          # сводка + новые файлы курсов в stash/
 ```
@@ -162,11 +180,26 @@ Code → **Routines** → New routine → **Local** (облачной задач
 | Instructions | текст из `docs/daily-digest-prompt.md` после черты |
 
 После создания — **Run now** и «always allow» на запросах разрешений: разрешение выдаётся
-на `study` (из Windows — на `wsl.exe`) один раз, иначе следующие запуски встанут на подтверждении.
+на `study` (в варианте с WSL — на `wsl.exe`) один раз, иначе следующие запуски встанут
+на подтверждении.
+
+### Linux и macOS
+
+Ничего особенного: команда `study` в `~/.local/bin`, задача запускает `study state --pull`
+из корня учебной директории. Если PATH задачи не содержит `~/.local/bin` (macOS без строки
+в `~/.zprofile`), промпт подсказывает запасной путь — `python3 .digest/study state --pull`.
+
+### Windows
+
+Claude Code Desktop на Windows выполняет команды в Git Bash; он находит sh-скрипт
+`~/.local/bin/study`, если `%USERPROFILE%\.local\bin` есть в PATH пользователя (это
+предлагает `study setup`), иначе — `py .digest/study state --pull` от рабочей папки.
+Вывод идёт в UTF-8 независимо от кодовой страницы консоли, файлы `stash/` и `NOTES.md`
+читаются по обычным путям.
 
 ### Windows + WSL
 
-Задача запускается в Windows, программа живёт в WSL. Рабочая папка задачи —
+Вариант, когда программа живёт в WSL, а задача запускается в Windows. Рабочая папка задачи —
 `\\wsl.localhost\<дистрибутив>\home\<…>\study`, оболочка при этом windows-овая (Git Bash),
 и все команды идут через `wsl.exe`:
 
@@ -185,6 +218,7 @@ MSYS_NO_PATHCONV=1 wsl.exe -d <дистрибутив> -- bash -c '~/work/study/
 - Файлы (`stash/`, `NOTES.md`, `config.env`) читаются по windows-пути напрямую, но
   симлинки WSL через `\\wsl.localhost` не открываются — поэтому файл оператора это копия,
   а не ссылка.
+- Установка тоже из WSL: `install.py` там, где будет работать программа.
 
 </details>
 
@@ -221,6 +255,7 @@ MSYS_NO_PATHCONV=1 wsl.exe -d <дистрибутив> -- bash -c '~/work/study/
 | `study digest [--days N] [--no-save] [--since X]` | та же сводка, только по ТУИС |
 | `study answer <код> <NN\|hwNN> [--tag T]` | заготовка ответа по лабораторной или домашней |
 | `study agent [код …]` | файл инструкций для ИИ-оператора: состояние / поставить |
+| `study setup` | первоначальная настройка: токены, каталоги, команда в PATH, оператор, курсы |
 | `study update [--check]` | обновить инструмент из репозитория и блоки агента; `--check` — только посмотреть |
 | `study --version` | версия: тег и число коммитов после него |
 
@@ -297,13 +332,13 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 
 Версии — теги `vX.Y.Z` на `master` и [GitHub Releases](https://github.com/nowherewashere/study-digest/releases)
 с заметками по conventional commits; `study --version` печатает тег и число коммитов
-после него. `master` всегда рабочий — именно его ставит `setup.sh`.
+после него. `master` всегда рабочий — именно его ставит `install.py`.
 
 ## Рабочий процесс
 
 **Материалы.** `study files <код>` показывает появившееся с прошлой сводки, `--all` — всё,
 `--pull` скачивает документы (`.pdf`, `.docx`, `.md`, `.tex`, архивы и подобные) до 50 МБ
-в `<код>/stash/`; в пустую `stash/` забирает всё — так наполняют её в первый раз (`setup.sh`
+в `<код>/stash/`; в пустую `stash/` забирает всё — так наполняют её в первый раз (`study setup`
 предлагает это сам). `study files --pull` без курса проходит по всем папкам из `config.env`.
 Страницы курса, видео и образы пропускаются; файл, лежащий где угодно внутри `stash/`,
 повторно не качается.
@@ -329,12 +364,13 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 
 ```
 .digest/
-├── study                 запускающий файл (лаунчер)
+├── study                 запускающий файл (лаунчер); на Windows включает UTF-8 и VT-режим
 ├── src/study/            пакет: cli · digest (сводка) · moodle · hosting · rutube · files
-│                         · answer · courses · agent · config · net · fmt · local · snapshot
+│                         · answer · courses · agent · setup · config · net · fmt · local · snapshot
 ├── docs/                 документация
 ├── tests/                unittest, только stdlib; сеть подменена, ответы ТУИС — в fixtures/
-├── setup.sh              установка и настройка
+├── install.py            установка: зависимости, клон, затем study setup
+├── setup.sh              обёртка над install.py ради старой ссылки
 ├── config.env.example    шаблон настроек
 ├── pyproject.toml        настройки проверки кода (ruff); пакет через pip не ставится
 └── config.env · .secrets/ · .state.json · state/   личное, вне git
@@ -346,22 +382,25 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 ## Разработка
 
 ```bash
-python3 -m unittest -v            # тесты, без сети и токенов (см. ниже)
-uvx ruff check src tests study    # стиль и ошибки, правила в pyproject.toml
+python3 -m unittest -v                       # тесты, без сети и токенов (см. ниже)
+uvx ruff check src tests study install.py    # стиль и ошибки, правила в pyproject.toml
 shellcheck setup.sh
 ```
 
-Тесты не ходят в сеть: `tests/__init__.py` подменяет `net.send` и `urllib.request.urlopen`
+Тесты не ходят в сеть: `tests/__init__.py` подменяет `urllib.request.urlopen`
 заглушкой, которая падает на любом вызове, а тесты сетевых модулей ставят поверх `net.send`
 `tests/fakes.py: FakeNet` — очередь ответов по (метод, подстроки: в «МЕТОД url» или целиком
 поле формы `k=v`) и запись всего отправленного (`form`, `json_body`, `files`, заголовки,
 сырое тело). Ответы Moodle — `tests/fixtures/*.json` по форме из `docs/tuis-api.md`, эталон
 сводки — `fixtures/digest.md`; время в них отсчитано от `fakes.NOW` (16.09.2026 09:00 MSK),
 тесты сводки фиксируют `time.time` и `TZ`. Git подменяется картой ответов (`hosting`) или
-временными репозиториями (`answer`, `state`, `update`); токены — тестовые строки во временном
-`config.env`, переменные окружения study и глобальный gitconfig на тесты не влияют.
+временными репозиториями (`answer`, `state`, `update`, `install`); токены — тестовые строки
+во временном `config.env`, переменные окружения study и глобальный gitconfig на тесты не влияют.
+`study setup` и `install.py` проходятся с подменёнными `input`/`getpass`. Кодировка у каждого
+`read_text`/`write_text`/`open` указана явно — за этим следит `tests/test_style.py`.
 
-То же самое гоняет CI на Python 3.8 и 3.12 при каждом push. Коммиты — conventional
+То же самое гоняет CI на ubuntu, macos и windows с Python 3.8 и 3.12 при каждом push
+(`TZ=MSK-3`: на Windows нет `tzset`, пояс задаётся окружением). Коммиты — conventional
 (`feat`, `fix`, `docs`, `refactor`, `style`, `test`, `ci`), версии — теги `vX.Y.Z` и Releases.
 
 ## Лицензия
