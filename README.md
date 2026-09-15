@@ -330,7 +330,7 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 ├── src/study/            пакет: cli · digest (сводка) · moodle · hosting · rutube · files
 │                         · answer · courses · agent · config · net · fmt · local · snapshot
 ├── docs/                 документация
-├── tests/                unittest, только stdlib
+├── tests/                unittest, только stdlib; сеть подменена, ответы ТУИС — в fixtures/
 ├── setup.sh              установка и настройка
 ├── config.env.example    шаблон настроек
 ├── pyproject.toml        настройки проверки кода (ruff); пакет через pip не ставится
@@ -343,10 +343,19 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 ## Разработка
 
 ```bash
-python3 -m unittest -v            # тесты: чистые функции, разбор config.env, снимки, блок агента
+python3 -m unittest -v            # тесты, без сети и токенов (см. ниже)
 uvx ruff check src tests study    # стиль и ошибки, правила в pyproject.toml
 shellcheck setup.sh
 ```
+
+Тесты не ходят в сеть: `tests/__init__.py` подменяет `net.send` заглушкой, которая падает
+на любом вызове, а тесты сетевых модулей ставят поверх неё `tests/fakes.py: FakeNet` — очередь
+ответов по (метод, подстроки ключа «МЕТОД url поля-формы») и запись всего отправленного
+(`form`, `json_body`, `files`, заголовки, сырое тело). Ответы Moodle — `tests/fixtures/*.json`
+по форме из `docs/tuis-api.md`, эталон сводки — `fixtures/digest.md`; время в них отсчитано от
+16.09.2026 09:00 MSK, тесты сводки фиксируют `time.time` и `TZ`. Git подменяется картой ответов
+(`hosting`) или временными репозиториями (`answer`, `state`, `update`); токены — тестовые
+строки во временном `config.env`.
 
 То же самое гоняет CI на Python 3.8 и 3.12 при каждом push. Коммиты — conventional
 (`feat`, `fix`, `docs`, `refactor`, `style`, `test`, `ci`), версии — теги `vX.Y.Z` и Releases.

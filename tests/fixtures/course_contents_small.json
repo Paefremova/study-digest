@@ -1,0 +1,44 @@
+[
+ {
+  "id": 20,
+  "name": "Общее",
+  "section": 0,
+  "visible": 1,
+  "modules": [
+   {
+    "id": 221,
+    "name": "Лекции",
+    "modname": "folder",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [],
+    "contents": [
+     {
+      "type": "file",
+      "filename": "lecture-01.pdf",
+      "filepath": "/",
+      "filesize": 100000,
+      "fileurl": "https://tuis.example/webservice/pluginfile.php/20/mod_folder/content/0/lecture-01.pdf",
+      "timecreated": 1789448400,
+      "timemodified": 1789534800,
+      "mimetype": "application/octet-stream"
+     }
+    ]
+   },
+   {
+    "id": 211,
+    "name": "Загрузка 1 лабораторной работы",
+    "modname": "assign",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [
+     {
+      "label": "Срок сдачи:",
+      "timestamp": 1790456340,
+      "dataid": "duedate"
+     }
+    ]
+   }
+  ]
+ }
+]

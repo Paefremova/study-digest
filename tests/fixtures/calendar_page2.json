@@ -1,0 +1,42 @@
+{
+ "events": [
+  {
+   "id": 1051,
+   "name": "Зачёт",
+   "timesort": 1790024340,
+   "eventtype": "due",
+   "modulename": "assign",
+   "course": {
+    "id": 4,
+    "fullname": "Физическая культура",
+    "shortname": "PE"
+   }
+  },
+  {
+   "id": 1052,
+   "name": "Курсовая",
+   "timesort": 1790197140,
+   "eventtype": "due",
+   "modulename": "assign",
+   "course": {
+    "id": 3,
+    "fullname": "Архив",
+    "shortname": "ARCH"
+   }
+  },
+  {
+   "id": 1053,
+   "name": "Кросс",
+   "timesort": 1792184340,
+   "eventtype": "due",
+   "modulename": "assign",
+   "course": {
+    "id": 4,
+    "fullname": "Физическая культура",
+    "shortname": "PE"
+   }
+  }
+ ],
+ "firstid": 1051,
+ "lastid": 1053
+}

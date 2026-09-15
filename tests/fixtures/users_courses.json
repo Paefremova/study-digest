@@ -1,0 +1,38 @@
+[
+ {
+  "id": 1,
+  "shortname": "NET-2026",
+  "fullname": "Сетевые технологии",
+  "hidden": false,
+  "lastaccess": 1789365600,
+  "startdate": 1787000340,
+  "enddate": 0
+ },
+ {
+  "id": 2,
+  "shortname": "NUM-2026",
+  "fullname": "Вычислительные методы",
+  "hidden": false,
+  "lastaccess": 1789365600,
+  "startdate": 1787000340,
+  "enddate": 0
+ },
+ {
+  "id": 3,
+  "shortname": "ARCH",
+  "fullname": "Архив",
+  "hidden": true,
+  "lastaccess": 1789365600,
+  "startdate": 1787000340,
+  "enddate": 0
+ },
+ {
+  "id": 4,
+  "shortname": "PE",
+  "fullname": "Физическая культура",
+  "hidden": false,
+  "lastaccess": 0,
+  "startdate": 1787000340,
+  "enddate": 0
+ }
+]

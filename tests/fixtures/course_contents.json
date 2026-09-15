@@ -1,0 +1,224 @@
+[
+ {
+  "id": 10,
+  "name": "Общее",
+  "section": 0,
+  "visible": 1,
+  "modules": [
+   {
+    "id": 123,
+    "name": "О курсе",
+    "modname": "page",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [],
+    "contents": [
+     {
+      "type": "file",
+      "filename": "index.html",
+      "filepath": "/",
+      "filesize": 0,
+      "fileurl": "https://tuis.example/webservice/pluginfile.php/10/mod_page/content/1/index.html",
+      "timecreated": 1788588000,
+      "timemodified": 1788674400,
+      "mimetype": "application/octet-stream"
+     }
+    ]
+   },
+   {
+    "id": 118,
+    "name": "Опрос о курсе",
+    "modname": "feedback",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [
+     {
+      "label": "Закрывается:",
+      "timestamp": 1790110740,
+      "dataid": "timeclose"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": 11,
+  "name": "Лабораторные работы",
+  "section": 1,
+  "visible": 1,
+  "modules": [
+   {
+    "id": 111,
+    "name": "Сдать отчет по лабораторной работе № 1. Vagrant и Packer",
+    "modname": "assign",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [
+     {
+      "label": "Срок сдачи:",
+      "timestamp": 1789851540,
+      "dataid": "duedate"
+     }
+    ]
+   },
+   {
+    "id": 112,
+    "name": "Сдать отчет по лабораторной работе № 2. DNS",
+    "modname": "assign",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [
+     {
+      "label": "Срок сдачи:",
+      "timestamp": 1789419540,
+      "dataid": "duedate"
+     }
+    ]
+   },
+   {
+    "id": 119,
+    "name": "Сдать отчет по лабораторной работе № 3. DHCP",
+    "modname": "assign",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [
+     {
+      "label": "Срок сдачи:",
+      "timestamp": 1789678740,
+      "dataid": "duedate"
+     }
+    ]
+   },
+   {
+    "id": 121,
+    "name": "Методичка 2",
+    "modname": "resource",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [],
+    "contents": [
+     {
+      "type": "file",
+      "filename": "002-dns.pdf",
+      "filepath": "/",
+      "filesize": 240000,
+      "fileurl": "https://tuis.example/webservice/pluginfile.php/10/mod_resource/content/1/002-dns.pdf?forcedownload=1",
+      "timecreated": 1789444800,
+      "timemodified": 1789531200,
+      "mimetype": "application/octet-stream"
+     }
+    ]
+   },
+   {
+    "id": 117,
+    "name": "Тест после лекции №1",
+    "modname": "quiz",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [
+     {
+      "label": "Открыт:",
+      "timestamp": 1788728340,
+      "dataid": "timeopen"
+     },
+     {
+      "label": "Закрывается:",
+      "timestamp": 1790456340,
+      "dataid": "timeclose"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": 12,
+  "name": "Доклады",
+  "section": 2,
+  "visible": 1,
+  "modules": [
+   {
+    "id": 116,
+    "name": "Выбрать тему доклада к лекции 1",
+    "modname": "choice",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [
+     {
+      "label": "Закрывается:",
+      "timestamp": 1789937940,
+      "dataid": "timeclose"
+     }
+    ]
+   },
+   {
+    "id": 115,
+    "name": "Сдать доклад. Лекция 1",
+    "modname": "assign",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [
+     {
+      "label": "Срок сдачи:",
+      "timestamp": 1790024340,
+      "dataid": "duedate"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "id": 13,
+  "name": "Материалы",
+  "section": 3,
+  "visible": 1,
+  "modules": [
+   {
+    "id": 122,
+    "name": "Материалы",
+    "modname": "folder",
+    "visible": 1,
+    "uservisible": true,
+    "dates": [],
+    "contents": [
+     {
+      "type": "file",
+      "filename": "lecture-01.pptx",
+      "filepath": "/",
+      "filesize": 5242880,
+      "fileurl": "https://tuis.example/webservice/pluginfile.php/10/mod_folder/content/0/lecture-01.pptx",
+      "timecreated": 1789192800,
+      "timemodified": 1789279200,
+      "mimetype": "application/octet-stream"
+     },
+     {
+      "type": "file",
+      "filename": "video.mp4",
+      "filepath": "/",
+      "filesize": 104857600,
+      "fileurl": "https://tuis.example/webservice/pluginfile.php/10/mod_folder/content/0/video.mp4",
+      "timecreated": 1789444800,
+      "timemodified": 1789531200,
+      "mimetype": "application/octet-stream"
+     },
+     {
+      "type": "file",
+      "filename": "big.zip",
+      "filepath": "/",
+      "filesize": 62914560,
+      "fileurl": "https://tuis.example/webservice/pluginfile.php/10/mod_folder/content/0/big.zip",
+      "timecreated": 1789444800,
+      "timemodified": 1789531200,
+      "mimetype": "application/octet-stream"
+     },
+     {
+      "type": "url",
+      "filename": "Ссылка",
+      "fileurl": "https://example.org/",
+      "filesize": 0,
+      "timemodified": 1789531200
+     }
+    ]
+   }
+  ]
+ }
+]

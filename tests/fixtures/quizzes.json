@@ -1,0 +1,49 @@
+{
+ "quizzes": [
+  {
+   "id": 7,
+   "course": 1,
+   "coursemodule": 117,
+   "name": "Тест после лекции №1",
+   "timeopen": 1788728340,
+   "timeclose": 1790456340,
+   "timelimit": 1800,
+   "attempts": 3,
+   "grade": 10
+  },
+  {
+   "id": 8,
+   "course": 2,
+   "coursemodule": 217,
+   "name": "Итоговый тест",
+   "timeopen": 1789505940,
+   "timeclose": 1791320340,
+   "timelimit": 0,
+   "attempts": 0,
+   "grade": 20
+  },
+  {
+   "id": 9,
+   "course": 1,
+   "coursemodule": 127,
+   "name": "Тренировочный тест",
+   "timeopen": 0,
+   "timeclose": 0,
+   "timelimit": 0,
+   "attempts": 0,
+   "grade": 0
+  },
+  {
+   "id": 10,
+   "course": 2,
+   "coursemodule": 227,
+   "name": "Тест через два месяца",
+   "timeopen": 1792184340,
+   "timeclose": 1794776340,
+   "timelimit": 600,
+   "attempts": 1,
+   "grade": 5
+  }
+ ],
+ "warnings": []
+}

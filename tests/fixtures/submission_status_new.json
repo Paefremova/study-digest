@@ -1,0 +1,20 @@
+{
+ "lastattempt": {
+  "submission": {
+   "id": 0,
+   "userid": 100,
+   "attemptnumber": 0,
+   "timecreated": 0,
+   "timemodified": 0,
+   "status": "new",
+   "plugins": []
+  },
+  "submissionsenabled": true,
+  "locked": false,
+  "graded": false,
+  "canedit": true,
+  "cansubmit": true,
+  "blindmarking": false
+ },
+ "warnings": []
+}

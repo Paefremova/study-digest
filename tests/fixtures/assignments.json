@@ -1,0 +1,150 @@
+{
+ "courses": [
+  {
+   "id": 1,
+   "fullname": "Сетевые технологии",
+   "shortname": "NET-2026",
+   "assignments": [
+    {
+     "id": 11,
+     "cmid": 111,
+     "course": 1,
+     "name": "Сдать отчет по лабораторной работе № 1. Vagrant и Packer",
+     "duedate": 1789851540,
+     "allowsubmissionsfromdate": 0,
+     "cutoffdate": 0,
+     "submissiondrafts": 0,
+     "intro": "<p>Сдать отчет по лабораторной работе № 1. Vagrant и Packer</p>",
+     "introformat": 1,
+     "grade": 10
+    },
+    {
+     "id": 12,
+     "cmid": 112,
+     "course": 1,
+     "name": "Сдать отчет по лабораторной работе № 2. DNS",
+     "duedate": 1789419540,
+     "allowsubmissionsfromdate": 0,
+     "cutoffdate": 0,
+     "submissiondrafts": 0,
+     "intro": "<p>Сдать отчет по лабораторной работе № 2. DNS</p>",
+     "introformat": 1,
+     "grade": 10
+    },
+    {
+     "id": 13,
+     "cmid": 113,
+     "course": 1,
+     "name": "Сдать отчёт по домашней работе №1 \"Кодирование\"",
+     "duedate": 1789160340,
+     "allowsubmissionsfromdate": 0,
+     "cutoffdate": 0,
+     "submissiondrafts": 0,
+     "intro": "<p>Сдать отчёт по домашней работе №1 \"Кодирование\"</p>",
+     "introformat": 1,
+     "grade": 10
+    },
+    {
+     "id": 14,
+     "cmid": 114,
+     "course": 1,
+     "name": "Эссе (без срока)",
+     "duedate": 0,
+     "allowsubmissionsfromdate": 0,
+     "cutoffdate": 0,
+     "submissiondrafts": 0,
+     "intro": "<p>Эссе (без срока)</p>",
+     "introformat": 1,
+     "grade": 10
+    },
+    {
+     "id": 15,
+     "cmid": 119,
+     "course": 1,
+     "name": "Сдать отчет по лабораторной работе № 3. DHCP",
+     "duedate": 1789678740,
+     "allowsubmissionsfromdate": 0,
+     "cutoffdate": 0,
+     "submissiondrafts": 0,
+     "intro": "<p>Сдать отчет по лабораторной работе № 3. DHCP</p>",
+     "introformat": 1,
+     "grade": 10
+    },
+    {
+     "id": 16,
+     "cmid": 120,
+     "course": 1,
+     "name": "Сдать отчет по лабораторной работе № 4. NAT",
+     "duedate": 1793393940,
+     "allowsubmissionsfromdate": 0,
+     "cutoffdate": 0,
+     "submissiondrafts": 0,
+     "intro": "<p>Сдать отчет по лабораторной работе № 4. NAT</p>",
+     "introformat": 1,
+     "grade": 10
+    },
+    {
+     "id": 17,
+     "cmid": 124,
+     "course": 1,
+     "name": "Контрольная работа",
+     "duedate": 1785704340,
+     "allowsubmissionsfromdate": 0,
+     "cutoffdate": 0,
+     "submissiondrafts": 0,
+     "intro": "<p>Контрольная работа</p>",
+     "introformat": 1,
+     "grade": 10
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "fullname": "Вычислительные методы",
+   "shortname": "NUM-2026",
+   "assignments": [
+    {
+     "id": 21,
+     "cmid": 211,
+     "course": 2,
+     "name": "Загрузка 1 лабораторной работы",
+     "duedate": 1790456340,
+     "allowsubmissionsfromdate": 0,
+     "cutoffdate": 0,
+     "submissiondrafts": 0,
+     "intro": "<p>Загрузка 1 лабораторной работы</p>",
+     "introformat": 1,
+     "grade": 10
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "fullname": "Физическая культура",
+   "shortname": "PE",
+   "assignments": [
+    {
+     "id": 41,
+     "cmid": 411,
+     "course": 4,
+     "name": "Реферат",
+     "duedate": 1789765140,
+     "allowsubmissionsfromdate": 0,
+     "cutoffdate": 0,
+     "submissiondrafts": 0,
+     "intro": "<p>Реферат</p>",
+     "introformat": 1,
+     "grade": 10
+    }
+   ]
+  }
+ ],
+ "warnings": [
+  {
+   "item": "module",
+   "itemid": 115,
+   "warningcode": "1",
+   "message": "No access rights in module context"
+  }
+ ]
+}

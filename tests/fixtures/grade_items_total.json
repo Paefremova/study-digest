@@ -1,0 +1,54 @@
+{
+ "usergrades": [
+  {
+   "courseid": 1,
+   "courseidnumber": "",
+   "userid": 100,
+   "userfullname": "Студент Тестовый",
+   "maxdepth": 1,
+   "gradeitems": [
+    {
+     "id": 1001,
+     "itemname": "Сдать отчет по лабораторной работе № 1. Vagrant и Packer",
+     "itemtype": "mod",
+     "itemmodule": "assign",
+     "graderaw": 8.0,
+     "gradeformatted": "8,00",
+     "grademin": 0.0,
+     "grademax": 10.0
+    },
+    {
+     "id": 1002,
+     "itemname": "Сдать отчет по лабораторной работе № 2. DNS",
+     "itemtype": "mod",
+     "itemmodule": "assign",
+     "graderaw": 9.5,
+     "gradeformatted": "9,50",
+     "grademin": 0.0,
+     "grademax": 10.0
+    },
+    {
+     "id": 1003,
+     "itemname": "Тест после лекции №1",
+     "itemtype": "mod",
+     "itemmodule": "quiz",
+     "graderaw": null,
+     "gradeformatted": "-",
+     "grademin": 0.0,
+     "grademax": 10.0
+    },
+    {
+     "id": 1000,
+     "itemname": null,
+     "itemtype": "course",
+     "itemmodule": null,
+     "graderaw": 17.5,
+     "gradeformatted": "17,50",
+     "grademin": 0.0,
+     "grademax": 100.0
+    }
+   ]
+  }
+ ],
+ "warnings": []
+}

@@ -1,0 +1,14 @@
+{
+ "choices": [
+  {
+   "id": 5,
+   "coursemodule": 116,
+   "course": 1,
+   "name": "Выбрать тему доклада к лекции 1",
+   "timeopen": 1788728340,
+   "timeclose": 1789937940,
+   "allowmultiple": false
+  }
+ ],
+ "warnings": []
+}

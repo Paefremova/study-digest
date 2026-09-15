@@ -1,0 +1,31 @@
+{
+ "lastattempt": {
+  "submission": {
+   "id": 5001,
+   "userid": 100,
+   "attemptnumber": 0,
+   "timecreated": 1789333140,
+   "timemodified": 1789333140,
+   "status": "submitted",
+   "plugins": []
+  },
+  "submissionsenabled": true,
+  "locked": false,
+  "graded": true,
+  "canedit": false,
+  "cansubmit": false,
+  "blindmarking": false
+ },
+ "feedback": {
+  "grade": {
+   "id": 7001,
+   "assignment": 12,
+   "userid": 100,
+   "grade": "9.50000",
+   "timemodified": 1789505940
+  },
+  "gradefordisplay": "9,50 / 10,00",
+  "gradeddate": 1789505940
+ },
+ "warnings": []
+}

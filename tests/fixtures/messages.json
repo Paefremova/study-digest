@@ -1,0 +1,64 @@
+{
+ "messages": [
+  {
+   "id": 904,
+   "useridfrom": -10,
+   "useridto": 100,
+   "subject": "Новый вход в аккаунт",
+   "text": "<p>…</p>",
+   "fullmessage": "…",
+   "timecreated": 1789534800,
+   "read": 0,
+   "component": "moodle",
+   "eventtype": "newlogin"
+  },
+  {
+   "id": 901,
+   "useridfrom": -10,
+   "useridto": 100,
+   "subject": "Вы отправили ответ на задание",
+   "text": "<p>…</p>",
+   "fullmessage": "…",
+   "timecreated": 1789531200,
+   "read": 0,
+   "component": "mod_assign",
+   "eventtype": "assign_notification"
+  },
+  {
+   "id": 902,
+   "useridfrom": 200,
+   "useridto": 100,
+   "subject": "Объявление: консультация перед ЛР 3",
+   "text": "<p>…</p>",
+   "fullmessage": "…",
+   "timecreated": 1789527600,
+   "read": 0,
+   "component": "mod_forum",
+   "eventtype": "posts"
+  },
+  {
+   "id": 905,
+   "useridfrom": -10,
+   "useridto": 100,
+   "subject": "Скоро срок сдачи",
+   "text": "<p>…</p>",
+   "fullmessage": "…",
+   "timecreated": 1789520400,
+   "read": 0,
+   "component": "mod_assign",
+   "eventtype": "assign_due_soon"
+  },
+  {
+   "id": 903,
+   "useridfrom": 200,
+   "useridto": 100,
+   "subject": "Старое объявление",
+   "text": "<p>…</p>",
+   "fullmessage": "…",
+   "timecreated": 1789430400,
+   "read": 0,
+   "component": "mod_forum",
+   "eventtype": "posts"
+  }
+ ]
+}

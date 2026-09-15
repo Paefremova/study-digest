@@ -1,0 +1,25 @@
+{
+ "sitename": "ТУИС (тест)",
+ "username": "student",
+ "firstname": "Студент",
+ "lastname": "Тестовый",
+ "fullname": "Студент Тестовый",
+ "userid": 100,
+ "siteurl": "https://tuis.example",
+ "release": "4.5 (Build: 20241007)",
+ "usermaxuploadfilesize": 3221225472,
+ "functions": [
+  {
+   "name": "mod_assign_get_assignments",
+   "version": "2024100700"
+  },
+  {
+   "name": "core_course_get_contents",
+   "version": "2024100700"
+  },
+  {
+   "name": "core_webservice_get_site_info",
+   "version": "2024100700"
+  }
+ ]
+}

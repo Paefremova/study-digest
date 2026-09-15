@@ -1,0 +1,29 @@
+{
+ "options": [
+  {
+   "id": 51,
+   "text": "Тема А",
+   "maxanswers": 1,
+   "countanswers": 1,
+   "checked": false,
+   "disabled": true
+  },
+  {
+   "id": 52,
+   "text": "Тема Б",
+   "maxanswers": 1,
+   "countanswers": 1,
+   "checked": false,
+   "disabled": false
+  },
+  {
+   "id": 53,
+   "text": "Тема В",
+   "maxanswers": 1,
+   "countanswers": 0,
+   "checked": false,
+   "disabled": false
+  }
+ ],
+ "warnings": []
+}
