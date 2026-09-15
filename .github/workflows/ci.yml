@@ -7,11 +7,15 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.8", "3.12"]
+    env:
+      TZ: MSK-3                  # время в фикстурах московское; на Windows tzset нет — только так
+      PYTHONIOENCODING: utf-8    # stdout раннера Windows — не консоль, а -v печатает кириллицу
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,10 +24,12 @@ jobs:
       - name: Тесты
         run: python -m unittest -v
       - name: Синтаксис
-        run: python -m compileall -q src study
+        run: python -m compileall -q src study install.py
+      - name: Лаунчер
+        run: python study --version
       - name: ruff
-        if: matrix.python == '3.12'
-        run: pipx run ruff check src tests study
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: pipx run ruff check src tests study install.py
       - name: shellcheck
-        if: matrix.python == '3.12'
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         run: shellcheck -S warning setup.sh
