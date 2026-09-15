@@ -9,7 +9,7 @@ import pathlib
 import sys
 import time
 
-from . import agent, answer, courses, digest, files, hosting, local, update
+from . import agent, answer, courses, digest, files, hosting, local, setup, update
 from .config import Config, Course, StudyError
 from .fmt import moment, table
 from .moodle import Moodle
@@ -355,6 +355,10 @@ def cmd_update(cfg, args):
     return d, "\n".join(lines)
 
 
+def cmd_setup(cfg, args):
+    return setup.run(cfg)
+
+
 def cmd_agent(cfg, args):
     rows = [agent.install(o) for o in args.operator] if args.operator \
         else [agent.status(o) for o in agent.OPERATORS]
@@ -401,6 +405,9 @@ def tuis_parsers(sub):
 
     s = add(sub, "update", "обновить study из репозитория и блоки агента", cmd_update)
     s.add_argument("--check", action="store_true", help="только проверить, ничего не менять")
+
+    add(sub, "setup", "первоначальная настройка: токены, каталоги, команда в PATH, оператор, курсы",
+        cmd_setup)
 
     s = add(sub, "agent", "файл инструкций для ИИ-оператора в корне учебной директории", cmd_agent)
     s.add_argument("operator", nargs="*", choices=list(agent.OPERATORS), metavar="оператор",
