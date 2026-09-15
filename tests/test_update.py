@@ -3,7 +3,7 @@ from unittest import mock
 
 from study import agent, update
 from study.config import StudyError
-from tests.fakes import git, tmpdir
+from tests.fakes import git, patch, tmpdir
 
 
 class UpdateTest(unittest.TestCase):
@@ -27,9 +27,7 @@ class UpdateTest(unittest.TestCase):
         src.write_text("# Инструкция\n\nv1\n")
         for mod, attr, value in ((update, "HERE", self.clone), (agent, "ROOT", root),
                                  (agent, "SOURCE", src)):
-            p = mock.patch.object(mod, attr, value)
-            p.start()
-            self.addCleanup(p.stop)
+            patch(self, mod, attr, value)
         self.root, self.src = root, src
 
     def upstream(self, *messages):
@@ -88,7 +86,5 @@ class UpdateTest(unittest.TestCase):
         with self.assertRaises(StudyError) as e:
             update.check()
         self.assertIn("fetch не удался", e.exception.message)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        git(self.clone, "branch", "--unset-upstream")   # клон без ветки слежения — не обновляем
+        self.assertIsNone(update.check())

@@ -201,6 +201,9 @@ if [ ! -t 0 ]; then
 elif "$DIGEST/study" courses --setup; then
   # папки курсов уже созданы командой выше; докрутим права config.env
   chmod 600 "$CONFIG" 2>/dev/null || true
+  # сводка тянет только новое с прошлого запуска, поэтому первое наполнение — отдельно
+  read -r -p "  скачать материалы всех курсов в stash/ сейчас? [Y/n] " answer
+  case ${answer:-y} in [yY]*) "$DIGEST/study" files --pull | sed 's/^/  /' || warn "не всё скачалось — позже: study files --pull" ;; esac
 else
   warn "не удалось (нет токена Moodle?) — позже: study courses --setup"
 fi
@@ -211,7 +214,8 @@ cat <<NEXT
   study courses --setup    перенастроить: какие курсы игнорировать и папки
   study agent <код>        файл инструкций для ИИ-оператора (claude, codex, gemini, copilot)
   study digest             первый запуск сохраняет снимок состояния
-  study files <код предмета> --pull    забрать материалы курса в stash/ (в пустую — всё)
+  study files --pull       материалы всех курсов в stash/ (в пустую папку — всё, дальше — новое)
+  study files <код> --pull то же для одного курса, с подробным списком
 
 Ежедневная сводка: Claude Code Desktop → Code → Routines → New routine → Local,
 рабочая папка $ROOT, в Instructions — текст из $DIGEST/docs/daily-digest-prompt.md.

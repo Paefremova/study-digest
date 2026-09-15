@@ -102,6 +102,16 @@ def pull(moodle, data, force=False):
     return data
 
 
+def summary(d, pulled=False):
+    """Одна строка на курс для прохода по всем: сколько новых, скачано, пропущено."""
+    can = [f for f in d["files"] if not f["skip"] and not f["have"]]
+    label = d["course"]["code"] or d["course"]["id"]
+    if pulled:
+        got, bad = len(d.get("pulled") or []), len(d.get("errors") or [])
+        return f"{label}: скачано {got}" + (f", не удалось {bad}" if bad else "")
+    return f"{label}: {len(can)} к загрузке" if can else f"{label}: нового нет"
+
+
 def render(d, pulled=False):
     """Список файлов с отметкой: скачан / уже есть / пропущен и почему / можно забрать."""
     out = [f"Курс: {d['course']['title'] or d['course']['id']} · stash: {d['stash']}",

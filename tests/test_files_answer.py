@@ -1,22 +1,18 @@
 import unittest
-from unittest import mock
 
 from study import answer, files, local
 from study.config import Course, StudyError
 from study.moodle import Moodle
-from tests.fakes import FakeNet, config, fixture, git, repo, tmpdir
+from tests.fakes import DAY, NOW, FakeNet, config, fixture, git, patch, repo, tmpdir
 
-NOW = 1789538400    # как в фикстурах: 002-dns.pdf, video.mp4, big.zip изменены 2 часа назад
-SINCE = NOW - 86400
+SINCE = NOW - DAY   # 002-dns.pdf, video.mp4, big.zip в фикстурах изменены 2 часа назад
 
 
 class FilesTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tmpdir(self)
         self.net = FakeNet().install(self)
-        p = mock.patch.object(files, "ROOT", self.tmp)
-        p.start()
-        self.addCleanup(p.stop)
+        patch(self, files, "ROOT", self.tmp)
         self.cfg = config(self.tmp, "CODE 1 nettech\n")
         self.m = Moodle(self.cfg)
         self.course = Course(1, "nettech", "Сетевые технологии")
@@ -99,9 +95,7 @@ class AnswerTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tmpdir(self)
         for mod in (local, answer):
-            p = mock.patch.object(mod, "ROOT", self.tmp)
-            p.start()
-            self.addCleanup(p.stop)
+            patch(self, mod, "ROOT", self.tmp)
         self.cfg = config(self.tmp, "GV_REPO=cfg/gv\nSC_REPO=cfg/sc\n")
         self.repo = repo(self.tmp / "nettech" / "2026-study-nettech",
                          {"origin": "ssh://git@gitverse.ru:2222/me/nettech.git",
@@ -167,7 +161,3 @@ class AnswerTest(unittest.TestCase):
         with self.assertRaises(StudyError) as e:
             answer.build(self.cfg, "nope", "1")
         self.assertIn("не найден репозиторий", e.exception.message)
-
-
-if __name__ == "__main__":
-    unittest.main()

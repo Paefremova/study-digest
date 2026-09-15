@@ -136,13 +136,23 @@ def cmd_grades(cfg, args):
 
 
 def cmd_files(cfg, args):
+    """Один курс — подробный список; без курса — все папки из config.env, по строке на курс."""
     m = Moodle(cfg)
-    course = named(cfg, m, args.course)
-    # в пустую stash/ забираем всё: сравнивать «новое с прошлого запуска» не с чем
-    d = files.listing(cfg, m, course, everything=args.all or files.empty(course))
-    if args.pull:
-        d = files.pull(m, d, force=args.force)
-    return d, files.render(d, pulled=args.pull)
+    if args.course:
+        course = named(cfg, m, args.course)
+        # в пустую stash/ забираем всё: сравнивать «новое с прошлого запуска» не с чем
+        d = files.listing(cfg, m, course, everything=args.all or files.empty(course))
+        if args.pull:
+            d = files.pull(m, d, force=args.force)
+        return d, files.render(d, pulled=args.pull)
+    out, lines = [], []
+    for course in (c for c in cfg.track(m.courses()) if c.code):
+        d = files.listing(cfg, m, course, everything=args.all or files.empty(course))
+        if args.pull:
+            d = files.pull(m, d, force=args.force)
+        out.append(d)
+        lines.append(files.summary(d, pulled=args.pull))
+    return out, "\n".join(lines) or "в config.env нет папок курсов (строк CODE)"
 
 
 def cmd_status(cfg, args):
@@ -435,7 +445,7 @@ def tuis_parsers(sub):
     s.add_argument("--course", help="id или код предмета")
 
     s = add(sub, "files", "файлы курса: что появилось и забрать в stash/", cmd_files)
-    s.add_argument("course", help="код предмета или id курса")
+    s.add_argument("course", nargs="?", help="код предмета или id курса; без него — все курсы")
     s.add_argument("--pull", action="store_true", help="скачать новые в <код>/stash/")
     s.add_argument("--all", action="store_true", help="показать все файлы, не только новые")
     s.add_argument("--force", action="store_true", help="перекачать даже то, что уже лежит")

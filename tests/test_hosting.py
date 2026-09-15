@@ -5,7 +5,7 @@ from unittest import mock
 from study import local
 from study.config import StudyError
 from study.hosting import HOSTS, GitVerse, SourceCraft
-from tests.fakes import FakeNet, config, tmpdir
+from tests.fakes import FakeNet, config, patch, tmpdir
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
 REMOTES = {("remote", "get-url", "origin"): "ssh://git@gitverse.ru:2222/me/course.git",
@@ -21,9 +21,7 @@ class HostingCase(unittest.TestCase):
         self.net = FakeNet().install(self)
         self.cfg = config(self.tmp, "GV_REPO=cfg/gv\nSC_REPO=cfg/sc\n")
         self.gits = []
-        p = mock.patch.object(local, "git", self.git)
-        p.start()
-        self.addCleanup(p.stop)
+        patch(self, local, "git", self.git)
         self.notes = self.tmp / "notes.md"
         self.notes.write_text("см. https://gitverse.ru/me/course/commit/abc\n")
 
@@ -193,7 +191,3 @@ class SourceCraftTest(HostingCase):
         self.assertEqual(self.net.sent[0]["files"],
                          {"file": ("slides.html", b"<html>", "text/html")})
         self.assertNotIn("?name=", self.net.sent[0]["url"])
-
-
-if __name__ == "__main__":
-    unittest.main()

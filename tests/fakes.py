@@ -1,11 +1,13 @@
 """Общее для тестов: подмена сети, фикстуры, временные config.env и git-репозитории.
 
 Вся сеть инструмента идёт через `net.send` (`net.request` и `net.raw` — обёртки над ним),
-поэтому подменяется только он. Ответы кладутся в очередь по (метод, подстроки ключа);
-ключ запроса — «МЕТОД url k=v …», где k=v — поля формы: у Moodle это wsfunction и параметры.
+поэтому подменяется только он. Ответы кладутся в очередь по (метод, подстроки): подстрока
+ищется в «МЕТОД url», либо целиком равна полю формы `k=v` или его значению — у Moodle это
+wsfunction и параметры, и `courseid=1` не совпадает с `courseid=12`.
 Каждый ответ отдаётся один раз; вызов без ответа и ответ без вызова — AssertionError.
 """
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -18,6 +20,11 @@ from study import net
 from study.config import Config
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
+NOW = 1789538400    # ср 16.09.2026 09:00 MSK — от него отсчитаны все времена в fixtures/
+DAY = 86400
+# Что Config читает из окружения раньше config.env — в тестах этого не должно быть; git —
+# без глобального и системного конфига, чтобы status/describe не зависели от машины.
+ENV = re.compile(r"^(TUIS_|GITVERSE_|SOURCECRAFT_|DIGEST_|RUTUBE_|GV_REPO$|SC_REPO$)")
 
 
 def fixture(name):
@@ -26,7 +33,20 @@ def fixture(name):
     return p.read_text() if p.suffix else json.loads(p.with_suffix(".json").read_text())
 
 
+def patch(case, obj, attr, value):
+    """Подмена атрибута до конца теста."""
+    p = mock.patch.object(obj, attr, value)
+    p.start()
+    case.addCleanup(p.stop)
+
+
 def tmpdir(case):
+    """Временный каталог и чистое окружение: без настроек study и без чужого gitconfig."""
+    clean = {k: v for k, v in os.environ.items() if not ENV.match(k)}
+    clean.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"})
+    p = mock.patch.dict(os.environ, clean, clear=True)
+    p.start()
+    case.addCleanup(p.stop)
     d = pathlib.Path(tempfile.mkdtemp())
     case.addCleanup(shutil.rmtree, d, True)
     return d
@@ -86,7 +106,7 @@ def decode(headers, data):
         for part in data.split(boundary)[1:-1]:
             head, _, body = part[2:].partition(b"\r\n\r\n")   # часть начинается с \r\n
             head, body = head.decode(), body[:-2]             # и кончается \r\n перед границей
-            name = re.search(r'name="([^"]*)"', head).group(1)
+            name = re.search(r'(?<!file)name="([^"]*)"', head).group(1)
             fname = re.search(r'filename="([^"]*)"', head)
             if fname:
                 ct = re.search(r"Content-Type: (.*)", head).group(1)
@@ -108,17 +128,21 @@ class FakeNet:
         self.sent = []    # записи отправленного: method, url, headers, data, form, json_body, …
 
     def install(self, case):
-        p = mock.patch.object(net, "send", self.send)
-        p.start()
-        case.addCleanup(p.stop)
-        case.addCleanup(self.done)
+        patch(case, net, "send", self.send)
+        # очередь проверяется только у прошедшего теста: упавший и так отчитался
+        case.addCleanup(lambda: getattr(getattr(case, "_outcome", None), "success", True)
+                        and self.done())
         return self
 
     def reply(self, method, what, body=None, headers=None):
-        """Ответ на первый запрос, чей ключ содержит все подстроки `what`.
+        """Ответ на первый запрос, которому подходят все подстроки `what`.
         Тело: dict/list → JSON, bytes → как есть, None → пусто, исключение → поднимается."""
         what = (what,) if isinstance(what, str) else tuple(what)
         self.queue.append((method.upper(), what, body, headers or {}))
+
+    def drop(self, *what):
+        """Убрать из очереди ответы, среди подстрок которых есть все `what`."""
+        self.queue = [q for q in self.queue if not set(what) <= set(q[1])]
 
     def done(self):
         left = [(m, " ".join(w)) for m, w, _, _ in self.queue]
@@ -136,11 +160,13 @@ class FakeNet:
                "timeout": timeout, "headers": dict(headers or {}), "data": data,
                **decode(headers, data)}
         self.sent.append(rec)
-        key = " ".join([method, url, *(f"{k}={v}" for k, v in (rec["form"] or {}).items())])
-        for i, (m, what, body, head) in enumerate(self.queue):
-            if m == method and all(w in key for w in what):
+        head = f"{method} {url}"
+        pairs = [f"{k}={v}" for k, v in (rec["form"] or {}).items()]
+        tokens = set(pairs) | set((rec["form"] or {}).values())
+        for i, (m, what, body, hd) in enumerate(self.queue):
+            if m == method and all(w in head or w in tokens for w in what):
                 del self.queue[i]
                 if isinstance(body, Exception):
                     raise body
-                return 200, head, encode(body)
-        raise AssertionError(f"нет ответа для {key}")
+                return 200, hd, encode(body)
+        raise AssertionError(f"нет ответа для {head} {' '.join(pairs)}")

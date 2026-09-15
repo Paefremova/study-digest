@@ -214,7 +214,3 @@ class ApiTest(RutubeCase):
         with self.assertRaises(StudyError) as e:
             self.r.upload_file(f)
         self.assertEqual(e.exception.message, "загружено 3 из 5 байт")
-
-
-if __name__ == "__main__":
-    unittest.main()

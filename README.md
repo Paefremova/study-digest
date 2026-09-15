@@ -134,6 +134,7 @@ curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/
 study me                    # токен Moodle работает?
 study courses --setup       # какие курсы не отслеживать и как зовутся их папки
 study agent claude          # инструкция для агента в CLAUDE.md (codex, gemini, copilot — см. ниже)
+study files --pull          # материалы всех курсов в stash/ (setup.sh предлагает это сам)
 study digest                # первый запуск сохраняет снимок состояния
 study state --pull          # сводка + новые файлы курсов в stash/
 ```
@@ -233,7 +234,7 @@ MSYS_NO_PATHCONV=1 wsl.exe -d <дистрибутив> -- bash -c '~/work/study/
 | `study calendar [--days N]` | события календаря (только дедлайны) |
 | `study grades [--course id\|код]` | баллы |
 | `study status <id-задания>` | состояние ответа на задание |
-| `study files <курс> [--pull] [--all] [--force]` | файлы курса: что появилось, забрать в `stash/` |
+| `study files [<курс>] [--pull] [--all] [--force]` | файлы курса: что появилось, забрать в `stash/`; без курса — по всем папкам из `config.env`, строкой на курс |
 | `study upload <файл>… [--itemid N]` | загрузка вложений, печатает `itemid` |
 | `study submit <id> [--text F] [--files <itemid>] --confirm` | отправка ответа; без `--confirm` — план и код возврата 1 |
 | `study functions [подстрока]` · `study call <функция> [ключ=значение …]` | ручки Moodle и произвольный вызов; повтор ключа — массив: `options[ids][0]=101` |
@@ -302,9 +303,10 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 
 **Материалы.** `study files <код>` показывает появившееся с прошлой сводки, `--all` — всё,
 `--pull` скачивает документы (`.pdf`, `.docx`, `.md`, `.tex`, архивы и подобные) до 50 МБ
-в `<код>/stash/`; в пустую `stash/` забирает всё — так наполняют её в первый раз. Страницы
-курса, видео и образы пропускаются; файл, лежащий где угодно внутри `stash/`, повторно
-не качается.
+в `<код>/stash/`; в пустую `stash/` забирает всё — так наполняют её в первый раз (`setup.sh`
+предлагает это сам). `study files --pull` без курса проходит по всем папкам из `config.env`.
+Страницы курса, видео и образы пропускаются; файл, лежащий где угодно внутри `stash/`,
+повторно не качается.
 
 **Ответ на лабораторную.** `study answer <код> <NN>` собирает текст ответа: репозитории —
 из git-remote, тег — последний или `--tag`, PDF отчёта и презентации — из `_output/`.
@@ -349,14 +351,15 @@ uvx ruff check src tests study    # стиль и ошибки, правила �
 shellcheck setup.sh
 ```
 
-Тесты не ходят в сеть: `tests/__init__.py` подменяет `net.send` заглушкой, которая падает
-на любом вызове, а тесты сетевых модулей ставят поверх неё `tests/fakes.py: FakeNet` — очередь
-ответов по (метод, подстроки ключа «МЕТОД url поля-формы») и запись всего отправленного
-(`form`, `json_body`, `files`, заголовки, сырое тело). Ответы Moodle — `tests/fixtures/*.json`
-по форме из `docs/tuis-api.md`, эталон сводки — `fixtures/digest.md`; время в них отсчитано от
-16.09.2026 09:00 MSK, тесты сводки фиксируют `time.time` и `TZ`. Git подменяется картой ответов
-(`hosting`) или временными репозиториями (`answer`, `state`, `update`); токены — тестовые
-строки во временном `config.env`.
+Тесты не ходят в сеть: `tests/__init__.py` подменяет `net.send` и `urllib.request.urlopen`
+заглушкой, которая падает на любом вызове, а тесты сетевых модулей ставят поверх `net.send`
+`tests/fakes.py: FakeNet` — очередь ответов по (метод, подстроки: в «МЕТОД url» или целиком
+поле формы `k=v`) и запись всего отправленного (`form`, `json_body`, `files`, заголовки,
+сырое тело). Ответы Moodle — `tests/fixtures/*.json` по форме из `docs/tuis-api.md`, эталон
+сводки — `fixtures/digest.md`; время в них отсчитано от `fakes.NOW` (16.09.2026 09:00 MSK),
+тесты сводки фиксируют `time.time` и `TZ`. Git подменяется картой ответов (`hosting`) или
+временными репозиториями (`answer`, `state`, `update`); токены — тестовые строки во временном
+`config.env`, переменные окружения study и глобальный gitconfig на тесты не влияют.
 
 То же самое гоняет CI на Python 3.8 и 3.12 при каждом push. Коммиты — conventional
 (`feat`, `fix`, `docs`, `refactor`, `style`, `test`, `ci`), версии — теги `vX.Y.Z` и Releases.

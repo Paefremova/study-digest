@@ -2,15 +2,13 @@ import json
 import os
 import time
 import unittest
-from unittest import mock
 
+from study import config as studyconfig
 from study import digest, files, local, update
 from study.config import StudyError
 from study.moodle import Moodle
-from tests.fakes import FakeNet, config, fixture, repo, tmpdir
+from tests.fakes import DAY, NOW, FakeNet, config, fixture, patch, repo, tmpdir
 
-NOW = 1789538400            # ср 16.09.2026 09:00 MSK — все фикстуры отсчитаны от него
-DAY = 86400
 DUE = {-5: 1789160340, -3: 1789333140, -2: 1789419540, 1: 1789678740, 3: 1789851540,
        10: 1790456340}      # 23:59 через N дней, как в фикстурах
 STATE = {"last_run": NOW - DAY,
@@ -64,7 +62,7 @@ class DigestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls._tz = os.environ.get("TZ")
-        os.environ["TZ"] = "Europe/Moscow"
+        os.environ["TZ"] = "MSK-3"   # POSIX-строка: не зависит от tzdata
         time.tzset()
 
     @classmethod
@@ -79,9 +77,7 @@ class DigestCase(unittest.TestCase):
         self.tmp = tmpdir(self)
         self.net = FakeNet().install(self)
         self.cfg = config(self.tmp, "COURSE_IGNORE=4\nCODE 1 nettech\n")
-        p = mock.patch.object(time, "time", lambda: NOW)
-        p.start()
-        self.addCleanup(p.stop)
+        patch(self, time, "time", lambda: NOW)
 
 
 class CollectorTest(DigestCase):
@@ -103,7 +99,8 @@ class CollectorTest(DigestCase):
         self.assertEqual(names(d["new_assignments"]), ["ДЗ 1 — Кодирование"])
         self.assertEqual([(a["short"], a["was"]["ts"], a["due"]["ts"]) for a in d["moved"]],
                          [("ЛР 2 — DNS", DUE[-3], DUE[-2])])
-        # состав курса: скрытое задание — «доступ закрыт», выбор темы — по варианту с checked
+        # состав курса: скрытое задание — «доступ закрыт»; тема не выбрана — submission "new"
+        # (отмеченный вариант — в test_choice_made)
         by = {a["short"]: a for a in d["deadlines"]}
         self.assertEqual((by["Доклад к лекции 1"]["source"], by["Доклад к лекции 1"]["submission"]),
                          ("course_contents", "hidden"))
@@ -116,7 +113,7 @@ class CollectorTest(DigestCase):
 
     def test_choice_made(self):
         queue(self.net)
-        self.net.queue = [q for q in self.net.queue if "mod_choice_get_choice_options" not in q[1]]
+        self.net.drop("mod_choice_get_choice_options")
         opts = fixture("choice_options")
         opts["options"][1]["checked"] = True
         self.net.reply("POST", "mod_choice_get_choice_options", opts)
@@ -179,8 +176,7 @@ class CollectorTest(DigestCase):
 
     def test_soft_errors(self):
         queue(self.net)
-        self.net.queue = [q for q in self.net.queue
-                          if "gradereport_user_get_grade_items" not in q[1]]
+        self.net.drop("gradereport_user_get_grade_items")
         self.net.reply("POST", ("gradereport_user_get_grade_items", "courseid=1"),
                        {"exception": "x", "errorcode": "nopermissiontoviewgrades", "message": "no"})
         self.net.reply("POST", ("gradereport_user_get_grade_items", "courseid=2"),
@@ -212,13 +208,9 @@ class StateTest(DigestCase):
 
     def setUp(self):
         super().setUp()
-        for mod in (local, files):
-            p = mock.patch.object(mod, "ROOT", self.tmp)
-            p.start()
-            self.addCleanup(p.stop)
-        p = mock.patch.object(update, "check", return_value=None)
-        p.start()
-        self.addCleanup(p.stop)
+        for mod in (local, files, studyconfig):
+            patch(self, mod, "ROOT", self.tmp)
+        patch(self, update, "check", lambda: None)
         self.repo = repo(self.tmp / "nettech" / "course",
                          {"origin": "ssh://git@gitverse.ru:2222/me/nettech.git",
                           "src": "ssh://ssh.sourcecraft.dev/me/nettech.git"}, tag="v1.1.0")
@@ -243,6 +235,7 @@ class StateTest(DigestCase):
         d = digest.state(self.cfg, None, with_tuis=False)
         self.assertIsNone(d["tuis"])
         c = d["courses"][0]
+        self.assertEqual(c["dir"], str(self.tmp / "nettech"))
         self.assertEqual((c["code"], c["repo"]["branch"], c["repo"]["last_tag"],
                           c["repo"]["dirty"]), ("nettech", "master", "v1.1.0", ["?? labs/"]))
         self.assertEqual(c["repo"]["remotes"],
@@ -288,7 +281,3 @@ class StateTest(DigestCase):
         d = digest.state(self.cfg, None, with_tuis=False)
         self.assertEqual(d["courses"][0]["releases"]["gitverse"], {"ok": False, "latest": None})
         self.assertEqual([e["where"] for e in d["errors"]], ["gitverse, курс nettech"])
-
-
-if __name__ == "__main__":
-    unittest.main()

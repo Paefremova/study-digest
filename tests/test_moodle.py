@@ -163,7 +163,3 @@ class MoodleTest(unittest.TestCase):
         self.m.save_submission(11, None)
         self.assertNotIn("plugindata[onlinetext_editor][text]",
                          self.net.calls("mod_assign_save_submission")[1])
-
-
-if __name__ == "__main__":
-    unittest.main()
