@@ -54,13 +54,14 @@ def passed(case):
 
 def tmpdir(case):
     """Временный каталог и чистое окружение: без настроек study и без чужого gitconfig."""
+    d = pathlib.Path(tempfile.mkdtemp()).resolve()   # resolve: на Windows mkdtemp даёт 8.3-имена
+    case.addCleanup(shutil.rmtree, d, True)
+    (d / "gitconfig").write_text("", encoding="utf-8")
     clean = {k: v for k, v in os.environ.items() if not ENV.match(k)}
-    clean.update({"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"})
+    clean.update({"GIT_CONFIG_GLOBAL": str(d / "gitconfig"), "GIT_CONFIG_NOSYSTEM": "1"})
     p = mock.patch.dict(os.environ, clean, clear=True)
     p.start()
     case.addCleanup(p.stop)
-    d = pathlib.Path(tempfile.mkdtemp())
-    case.addCleanup(shutil.rmtree, d, True)
     return d
 
 

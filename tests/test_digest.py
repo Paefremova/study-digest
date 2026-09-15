@@ -63,7 +63,11 @@ class DigestCase(unittest.TestCase):
     def setUpClass(cls):
         cls._tz = os.environ.get("TZ")
         os.environ["TZ"] = "MSK-3"   # POSIX-строка: не зависит от tzdata
-        time.tzset()
+        if hasattr(time, "tzset"):
+            time.tzset()
+        elif time.strftime("%H:%M", time.localtime(NOW)) != "09:00":
+            # Windows: пояс читается из TZ только при старте процесса — задать TZ=MSK-3 снаружи
+            raise unittest.SkipTest("нужен TZ=MSK-3 в окружении")
 
     @classmethod
     def tearDownClass(cls):
@@ -71,7 +75,8 @@ class DigestCase(unittest.TestCase):
             del os.environ["TZ"]
         else:
             os.environ["TZ"] = cls._tz
-        time.tzset()
+        if hasattr(time, "tzset"):
+            time.tzset()
 
     def setUp(self):
         self.tmp = tmpdir(self)
