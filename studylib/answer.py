@@ -6,27 +6,15 @@
 """
 import pathlib
 
-from . import local
+from . import hosting, local
 from .config import ROOT, StudyError
 
-KEYS = [
-    ("RUTUBE_LAB", "Выполнение лабораторной работы"),
-    ("RUTUBE_REPORT", "Подготовка отчёта"),
-    ("RUTUBE_PRESENTATION", "Подготовка презентации"),
-    ("RUTUBE_DEFENSE", "Защита лабораторной работы"),
-    ("VK_LAB", "Выполнение лабораторной работы"),
-    ("VK_REPORT", "Подготовка отчёта"),
-    ("VK_PRESENTATION", "Подготовка презентации"),
-    ("VK_DEFENSE", "Защита лабораторной работы"),
-]
 TEMPLATE = ("# Ссылки на скринкасты для ответа в ТУИС. "
             "Заполнить и запустить `study answer` ещё раз.\n")
-# Файлы лежат вне репозитория курса: там должна быть только сама работа.
 
 
-def build(code, num, tag=None):
-    """Текст ответа и список вложений. Нет videos.env — создаётся пустой."""
-    # Номер вида 01 — лабораторная labs/lab01; hw01 — домашняя работа homework/hw01.
+def build(cfg, code, num, tag=None):
+    """Текст ответа и список вложений. Нет labNN.env — создаётся пустой."""
     kind, num = local.work_id(num)
     repo = local.course_repo(code)
     if not repo:
@@ -35,39 +23,35 @@ def build(code, num, tag=None):
     if not lab.is_dir():
         raise StudyError("local", f"нет каталога {lab}")
 
-    into = local.tuis_dir(code)
     v = local.videos(code, num, kind)
     if not v["exists"]:
-        into.mkdir(parents=True, exist_ok=True)
-        pathlib.Path(v["path"]).write_text(
-            TEMPLATE + "".join(f"{k}=\n" for k in local.VIDEO_KEYS))
-        return {"created": v["path"], "text": None, "attachments": [],
-                "missing": v["missing"]}
+        env = pathlib.Path(v["path"])
+        env.parent.mkdir(parents=True, exist_ok=True)
+        env.write_text(TEMPLATE + "".join(f"{k}=\n" for k in local.VIDEO_KEYS))
+        return {"created": v["path"], "text": None, "attachments": [], "missing": v["missing"]}
 
     tag = tag or local.git(repo, "describe", "--tags", "--abbrev=0")
-    gv = local.repo_from_remote(repo, "origin", "gitverse.ru")
-    sc = local.repo_from_remote(repo, "src", "sourcecraft")
     val = v["values"]
 
     # Без заголовков (в Moodle они выходят огромными), незаполненные ссылки не печатаем.
-    def hosting(playlist_key, name, keys):
-        links = [f"  - [{t}]({val[k]})" for k, t in keys if val.get(k)]
-        if not links and not val.get(playlist_key):
-            return []
-        head = (f"- Скринкасты, {name}: [плейлист]({val[playlist_key]})"
-                if val.get(playlist_key) else f"- Скринкасты, {name}:")
-        return [head] + links
+    body = []
+    for site, name in local.SITES.items():
+        links = [f"  - [{t}]({val[f'{site}_{slot}']})" for slot, t in local.SLOTS.items()
+                 if val.get(f"{site}_{slot}")]
+        playlist = val.get(f"{site}_PLAYLIST")
+        if links or playlist:
+            body.append(f"- Скринкасты, {name}:" + (f" [плейлист]({playlist})" if playlist else ""))
+            body += links
+    body.append("- Репозиторий и релиз:")
+    for cls in hosting.HOSTS.values():
+        # только по remote этого репозитория: GV_REPO/SC_REPO из config.env сюда не подставляем
+        slug = local.repo_from_remote(repo, cls.remote, cls.host)
+        if slug:
+            h = cls(cfg, repo=slug)
+            body.append(f"  - [{cls.source}]({h.repo_url()}), [релиз {tag}]({h.web_url(tag)})")
+    text = "\n".join(body) + "\n"
 
-    body = hosting("RUTUBE_PLAYLIST", "Rutube", KEYS[:4])
-    body += hosting("VK_PLAYLIST", "VKvideo", KEYS[4:])
-    body += ["- Репозиторий и релиз:",
-             f"  - [gitverse](https://gitverse.ru/{gv}), "
-             f"[релиз {tag}](https://gitverse.ru/{gv}/releases/tag/{tag})",
-             f"  - [sourcecraft](https://sourcecraft.dev/{sc}), "
-             f"[релиз {tag}](https://sourcecraft.dev/{sc}/releases/{tag})", ""]
-    text = "\n".join(body)
-
-    out = into / f"{kind}{num}.md"
+    out = local.tuis_dir(code) / f"{kind}{num}.md"
     out.write_text(text)
     return {"created": None, "path": str(out), "text": text, "tag": tag,
             "repo": str(repo), "lab": str(lab),

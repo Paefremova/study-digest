@@ -1,8 +1,6 @@
 """HTTP поверх stdlib: form, json, multipart. Все ошибки — StudyError.
 
-Отличия от curl, из-за которых здесь явные заголовки: urllib по умолчанию представляется
-`Python-urllib/3.12`. При ошибке обязательно читаем тело — GitVerse отвечает 400/422
-с пустым телом, и без чтения пользователь увидит меньше, чем видел с curl.
+urllib по умолчанию представляется `Python-urllib/3.12`, поэтому User-Agent задаётся явно.
 """
 import json as jsonlib
 import urllib.error
@@ -29,12 +27,17 @@ def multipart(fields, files):
     return bytes(out), f"multipart/form-data; boundary={b}"
 
 
-def _open(req, source, where, timeout):
-    """Один поход в сеть. Тело ошибки читается обязательно: GitVerse отвечает 400/422
-    с пустым телом, и без чтения пользователь увидит меньше, чем видел с curl."""
+def send(url, source, *, method=None, headers=None, data=None, timeout=600, where=None):
+    """Один поход в сеть → (код, заголовки, тело). Тело ошибки читается обязательно:
+    GitVerse отвечает 400/422 с пустым телом, и без чтения пользователь увидит меньше,
+    чем видел с curl."""
+    head = {"User-Agent": UA}
+    head.update(headers or {})
+    req = urllib.request.Request(url, data=data, headers=head,
+                                 method=method or ("POST" if data is not None else "GET"))
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.read()
+            return r.status, dict(r.headers), r.read()
     except urllib.error.HTTPError as e:
         detail = (e.read() or b"")[:200].decode("utf-8", "replace").strip()
         raise StudyError(source, f"HTTP {e.code}" + (f": {detail}" if detail else " (пустой ответ)"),
@@ -45,18 +48,14 @@ def _open(req, source, where, timeout):
 
 def raw(url, source, *, headers=None, timeout=600, where=None):
     """GET, отдающий байты: файлы курсов приходят не JSON."""
-    head = {"User-Agent": UA}
-    head.update(headers or {})
-    return _open(urllib.request.Request(url, headers=head), source, where, timeout)
+    return send(url, source, headers=headers, timeout=timeout, where=where)[2]
 
 
 def request(url, source, *, method=None, headers=None, form=None, json_body=None,
             files=None, fields=None, timeout=120, where=None):
     """Один запрос. Возвращает разобранный JSON, либо текст, если это не JSON."""
-    head = {"User-Agent": UA}
-    head.update(headers or {})
+    head = dict(headers or {})
     data = None
-
     if form is not None:
         data = urllib.parse.urlencode(form).encode()
         head.setdefault("Content-Type", "application/x-www-form-urlencoded")
@@ -65,40 +64,12 @@ def request(url, source, *, method=None, headers=None, form=None, json_body=None
         data = jsonlib.dumps(json_body, ensure_ascii=False).encode()
         head["Content-Type"] = "application/json"
     elif files is not None:
-        data, ctype = multipart(fields, files)
-        head["Content-Type"] = ctype
+        data, head["Content-Type"] = multipart(fields, files)
 
-    req = urllib.request.Request(url, data=data, headers=head,
-                                 method=method or ("POST" if data is not None else "GET"))
-    body = _open(req, source, where, timeout)
-
+    body = send(url, source, method=method, headers=head, data=data, timeout=timeout, where=where)[2]
     if not body:
         return None
     try:
         return jsonlib.loads(body)
     except ValueError:
         return body.decode("utf-8", "replace")
-
-
-def http_code(url, source, **kw):
-    """Как request, но возвращает код ответа — для загрузок, где тело неинтересно."""
-    try:
-        request(url, source, **kw)
-        return 201
-    except StudyError as e:
-        raise e
-
-
-def send(url, source, *, method, headers=None, data=None, timeout=600, where=None):
-    """Низкоуровневый запрос с доступом к коду и заголовкам ответа — нужно tus (Upload-Offset, Location)."""
-    head = {"User-Agent": UA}
-    head.update(headers or {})
-    req = urllib.request.Request(url, data=data, headers=head, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, dict(r.headers), r.read()
-    except urllib.error.HTTPError as e:
-        detail = (e.read() or b"")[:200].decode("utf-8", "replace").strip()
-        raise StudyError(source, f"HTTP {e.code}" + (f": {detail}" if detail else ""), where=where) from None
-    except urllib.error.URLError as e:
-        raise StudyError(source, f"нет связи: {e.reason}", where=where) from None

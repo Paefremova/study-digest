@@ -5,10 +5,13 @@ import subprocess
 
 from .config import ROOT, StudyError
 
-VIDEO_KEYS = [
-    "RUTUBE_PLAYLIST", "RUTUBE_LAB", "RUTUBE_REPORT", "RUTUBE_PRESENTATION", "RUTUBE_DEFENSE",
-    "VK_PLAYLIST", "VK_LAB", "VK_REPORT", "VK_PRESENTATION", "VK_DEFENSE",
-]
+# Ссылки на скринкасты в <код>/tuis/labNN.env: плейлист и четыре записи на двух площадках.
+SITES = {"RUTUBE": "Rutube", "VK": "VKvideo"}
+SLOTS = {"LAB": "Выполнение лабораторной работы", "REPORT": "Подготовка отчёта",
+         "PRESENTATION": "Подготовка презентации", "DEFENSE": "Защита лабораторной работы"}
+VIDEO_KEYS = [f"{site}_{slot}" for site in SITES for slot in ["PLAYLIST", *SLOTS]]
+# Каталоги работ в репозитории курса: labs/labNN и homework/hwNN.
+WORK_DIRS = {"lab": "labs", "hw": "homework"}
 
 
 def git(path, *args, check=False):
@@ -55,14 +58,11 @@ def tuis_dir(code):
     return ROOT / code / "tuis"
 
 
-WORK_DIRS = {"lab": "labs", "hw": "homework"}
-
-
 def work_id(num):
     """'01' → ('lab', '01'); 'hw1' → ('hw', '01')."""
     num = str(num).strip().lower()
     kind = "hw" if num.startswith("hw") else "lab"
-    return kind, num.removeprefix("hw").removeprefix("lab").zfill(2)
+    return kind, re.sub(r"^(hw|lab)", "", num).zfill(2)
 
 
 def videos(code, num, kind="lab"):
@@ -84,16 +84,12 @@ def videos(code, num, kind="lab"):
 def labs(repo, code):
     """Лабы репозитория: исходники, собранные файлы, ссылки на записи, заготовка ответа."""
     out = []
-    for lab in sorted((repo / "labs").glob("lab*")) if (repo / "labs").is_dir() else []:
-        item = {"num": lab.name.replace("lab", ""), "path": str(lab)}
+    for lab in sorted((repo / WORK_DIRS["lab"]).glob("lab*")):
+        item = {"num": lab.name[3:], "path": str(lab)}
         for kind in ("report", "presentation"):
-            d = lab / kind
-            pdfs = sorted(d.glob("_output/*.pdf")) if d.is_dir() else []
-            item[kind] = {
-                "source": bool(list(d.glob("*.qmd"))) if d.is_dir() else False,
-                "pdf": str(pdfs[0]) if pdfs else None,
-                "built": bool(pdfs),
-            }
+            pdfs = sorted((lab / kind).glob("_output/*.pdf"))
+            item[kind] = {"source": any((lab / kind).glob("*.qmd")),
+                          "pdf": str(pdfs[0]) if pdfs else None, "built": bool(pdfs)}
         item["videos"] = videos(code, item["num"])
         item["answer_draft"] = (tuis_dir(code) / f"lab{item['num']}.md").exists()
         item["attachments"] = [str(p) for p in sorted(lab.glob("*/_output/*.pdf"))]
@@ -102,18 +98,14 @@ def labs(repo, code):
 
 
 def repo_state(repo):
-    """Ветка, незакоммиченное, теги, адреса на хостингах."""
-    changes = [line for line in git(repo, "status", "--porcelain").splitlines() if line]
-    tags = git(repo, "tag").splitlines()
+    """Ветка, незакоммиченное, теги. Адреса на хостингах знает hosting.py, он их и дописывает."""
     return {
         "path": str(repo),
         "branch": git(repo, "branch", "--show-current"),
         "head": git(repo, "rev-parse", "--short", "HEAD"),
-        "dirty": changes,
-        "tags": tags,
+        "dirty": [line for line in git(repo, "status", "--porcelain").splitlines() if line],
+        "tags": git(repo, "tag").splitlines(),
         "last_tag": git(repo, "describe", "--tags", "--abbrev=0") or None,
-        "remotes": {"gitverse": repo_from_remote(repo, "origin", "gitverse.ru") or None,
-                    "sourcecraft": repo_from_remote(repo, "src", "sourcecraft") or None},
     }
 
 

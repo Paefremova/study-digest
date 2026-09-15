@@ -13,6 +13,7 @@ import base64
 import getpass
 import json
 import os
+import pathlib
 import time
 import uuid
 
@@ -26,6 +27,12 @@ UPLOAD_URL = "https://u.rutube.ru/upload/"
 WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
 # Возрастное ограничение: человеческий возраст → age_id (справочник зашит в студию, эндпоинта нет).
 AGE = {0: 1, 6: 2, 12: 3, 14: 6, 16: 4, 18: 5}
+DEFAULT_CATEGORY = 13   # «Разное»; список — `study rt categories`
+
+
+def _obj(out):
+    """Ответ как словарь: пустое тело, текст или список → {}."""
+    return out if isinstance(out, dict) else {}
 
 
 def _extract_refresh(s):
@@ -66,13 +73,14 @@ class Rutube:
         os.replace(tmp, path)
 
     @staticmethod
-    def _jwt_exp(token):
-        """Срок действия JWT (unix); 0 — если не разобрать (считаем истёкшим)."""
+    def _jwt_payload(token):
+        """Полезная нагрузка JWT; {} — если не разобрать."""
         try:
             p = token.split(".")[1]
-            return json.loads(base64.urlsafe_b64decode(p + "=" * (-len(p) % 4))).get("exp", 0)
-        except Exception:
-            return 0
+            data = json.loads(base64.urlsafe_b64decode(p + "=" * (-len(p) % 4)))
+        except (IndexError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
 
     # --- вход ---
 
@@ -80,10 +88,10 @@ class Rutube:
         """Схема token: token_auth по email+паролю. Пароль не хранится — только сам токен."""
         email = email or input("Rutube email: ").strip()
         password = password or getpass.getpass("Rutube пароль: ")
-        out = net.request(BASE + "/accounts/token_auth/", self.source,
-                          json_body={"username": email, "password": password},
-                          where="token_auth") or {}
-        token = out.get("token") if isinstance(out, dict) else None
+        out = _obj(net.request(BASE + "/accounts/token_auth/", self.source,
+                               json_body={"username": email, "password": password},
+                               where="token_auth"))
+        token = out.get("token")
         if not token:
             raise StudyError(self.source, f"токен не получен: {out}", code="auth")
         self._save(self._token_path(), token)
@@ -110,10 +118,10 @@ class Rutube:
 
     def _refresh_call(self, token):
         """refresh_token → (свежий access_token, новый refresh_token|None). Ошибка — StudyError."""
-        out = net.request(REFRESH_URL, self.source, method="POST",
-                          headers={"Cookie": "refreshToken=" + token},
-                          where="token/refresh") or {}
-        access = out.get("access_token") if isinstance(out, dict) else None
+        out = _obj(net.request(REFRESH_URL, self.source, method="POST",
+                               headers={"Cookie": "refreshToken=" + token},
+                               where="token/refresh"))
+        access = out.get("access_token")
         if not access:
             raise StudyError(self.source, f"refresh не удался: {out}", code="auth")
         return access, out.get("refresh_token")
@@ -125,7 +133,7 @@ class Rutube:
         af = self._access_path()
         if af.exists():
             cached = af.read_text().strip()
-            if cached and self._jwt_exp(cached) - time.time() > 120:
+            if cached and self._jwt_payload(cached).get("exp", 0) - time.time() > 120:
                 self._access = cached
                 return cached
         rf = self._refresh_path()
@@ -152,32 +160,43 @@ class Rutube:
         if mode == "jwt":
             return {"Authorization": "Bearer " + self._mint()}
         if mode == "token":
-            return {"Authorization": "Token " + self.cfg.token("RUTUBE_TOKEN_FILE")}
+            return {"Authorization": "Token " + self.cfg.token("RUTUBE_TOKEN")}
         raise StudyError(self.source, f"неизвестный режим {mode}", code="config")
 
     def api(self, path, **kw):
+        """Запрос с авторизацией, ответ как есть (для `rt api`)."""
         head = self._auth_header()
         head.update(kw.pop("headers", None) or {})
         return net.request(BASE + path, self.source, headers=head, where=path, **kw)
 
+    def _json(self, path, **kw):
+        """То же, но ответ — всегда словарь."""
+        return _obj(self.api(path, **kw))
+
     def me(self):
         """Проверка входа: список своих видео, первая страница."""
-        out = self.api("/video/person/?limit=5") or {}
-        rows = out.get("results", []) if isinstance(out, dict) else []
+        rows = self._json("/video/person/?limit=5").get("results", [])
         return [{"id": v.get("id"), "title": v.get("title"), "url": v.get("video_url"),
                  "hidden": v.get("is_hidden")} for v in rows]
 
     # --- видео-флоу ---
 
     def categories(self):
-        """Список категорий (публично, токен не нужен): id + короткое имя + название."""
-        out = net.request(BASE + "/video/category/", self.source, where="video/category")
-        rows = out.get("results", []) if isinstance(out, dict) else (out or [])
+        """Список категорий (публично, токен не нужен, ответ — голый массив)."""
+        rows = net.request(BASE + "/video/category/", self.source, where="video/category") or []
         return [{"id": c.get("id"), "short": c.get("short_name"), "name": c.get("name")} for c in rows]
+
+    @staticmethod
+    def video_url(vid):
+        return f"https://rutube.ru/video/{vid}/"
+
+    @staticmethod
+    def playlist_url(pid):
+        return f"https://rutube.ru/plst/{pid}/"
 
     def video(self, vid):
         """Метаданные и состояние своего видео (v2)."""
-        return self.api(f"/v2/video/{vid}/") or {}
+        return self._json(f"/v2/video/{vid}/")
 
     def edit(self, vid, **fields):
         """PATCH метаданных: title/description/category (int id)/is_hidden/age (0,6,12,14,16,18)."""
@@ -187,13 +206,11 @@ class Rutube:
             body["age_restriction"] = AGE.get(int(age), int(age))
         if not body:
             raise StudyError(self.source, "нечего менять", code="usage")
-        return self.api(f"/v2/video/{vid}/?client=vulp", method="PATCH", json_body=body) or {}
+        return self._json(f"/v2/video/{vid}/?client=vulp", method="PATCH", json_body=body)
 
     def _channel_id(self):
         """id канала (= user_id из access-токена) — нужен для списка своих плейлистов."""
-        payload = self._mint().split(".")[1]
-        payload += "=" * (-len(payload) % 4)
-        data = json.loads(base64.urlsafe_b64decode(payload))
+        data = self._jwt_payload(self._mint())
         cid = data.get("user_id") or (data.get("data") or {}).get("user_info", {}).get("id")
         if not cid:
             raise StudyError(self.source, "не удалось определить id канала", code="auth")
@@ -201,58 +218,65 @@ class Rutube:
 
     def playlists(self):
         """Свои плейлисты."""
-        out = self.api(f"/playlist/user/{self._channel_id()}/") or {}
-        rows = out.get("results", []) if isinstance(out, dict) else (out or [])
-        return [{"id": p.get("id"), "title": p.get("title"),
-                 "url": f"https://rutube.ru/plst/{p.get('id')}/",
+        rows = self._json(f"/playlist/user/{self._channel_id()}/").get("results", [])
+        return [{"id": p.get("id"), "title": p.get("title"), "url": self.playlist_url(p.get("id")),
                  "count": p.get("videos_count"), "hidden": p.get("is_hidden")} for p in rows]
 
     def playlist_create(self, title, hidden=False):
-        return self.api("/playlist/custom/", method="POST",
-                        json_body={"title": title, "is_hidden": bool(hidden)}) or {}
+        out = self._json("/playlist/custom/", method="POST",
+                         json_body={"title": title, "is_hidden": bool(hidden)})
+        pid = out.get("id")
+        return {"id": pid, "title": out.get("title", title), "hidden": out.get("is_hidden", hidden),
+                "url": self.playlist_url(pid) if pid else None}
 
     def playlist_add(self, pid, vid):
         """Добавить видео vid в плейлист pid (в пути — id видео, include — id плейлистов)."""
-        return self.api(f"/playlist/custom/update/{vid}/", method="POST",
-                        json_body={"include": [int(pid)], "exclude": []}) or {}
+        return self._json(f"/playlist/custom/update/{vid}/", method="POST",
+                          json_body={"include": [int(pid)], "exclude": []})
 
     # --- загрузка ---
 
     def progress(self, vid):
         """Прогресс загрузки/конвертации видео."""
-        return self.api(f"/uploader/{vid}/progress/") or {}
+        return self._json(f"/uploader/{vid}/progress/")
+
+    def _describe(self, vid, title, hidden, **fields):
+        """Общий хвост загрузки: выставить метаданные и вернуть карточку видео."""
+        self.edit(vid, title=title, is_hidden=bool(hidden), **fields)
+        return {"id": vid, "url": self.video_url(vid), "title": title, "hidden": bool(hidden)}
 
     def upload_url(self, src, title=None, description=None, category=None, hidden=False, age=None):
         """Импорт по URL: Rutube сам скачает файл, затем правим метаданные."""
-        out = self.api("/video/", method="POST",
-                       json_body={"url": src, "category_id": category or 13}) or {}
+        out = self._json("/video/", method="POST",
+                         json_body={"url": src, "category_id": category or DEFAULT_CATEGORY})
         vid = out.get("video_id") or out.get("id")
         if not vid:
             raise StudyError(self.source, f"video/ без id: {out}", code="upload")
-        self.edit(vid, title=title, description=description, category=category, is_hidden=bool(hidden), age=age)
-        return {"id": vid, "url": f"https://rutube.ru/video/{vid}/", "title": title, "hidden": bool(hidden)}
+        return self._describe(vid, title, hidden, description=description, category=category, age=age)
 
     def upload_file(self, path, title=None, description=None, category=None, hidden=False, age=None):
         """Прямая загрузка локального файла: сессия → метаданные → байты (tus)."""
-        title = title or os.path.splitext(os.path.basename(path))[0]
-        sess = self.api("/uploader/upload_session/?client=vulp&batch_id=" + uuid.uuid4().hex,
-                        method="POST", json_body={"title": title}) or {}
+        path = pathlib.Path(path)
+        title = title or path.stem
+        sess = self._json("/uploader/upload_session/?client=vulp&batch_id=" + uuid.uuid4().hex,
+                          method="POST", json_body={"title": title})
         sid, vid = sess.get("sid"), sess.get("video")
         if not sid or not vid:
             raise StudyError(self.source, f"upload_session без sid/video: {sess}", code="upload")
-        self.edit(vid, title=title, description=description, category=category, is_hidden=bool(hidden), age=age)
-        self._tus(sid, vid, path)
-        return {"id": vid, "url": f"https://rutube.ru/video/{vid}/", "title": title, "hidden": bool(hidden)}
+        card = self._describe(vid, title, hidden, description=description, category=category, age=age)
+        self._tus(sid, vid, path.read_bytes())
+        return card
 
-    def _tus(self, sid, vid, path):
+    def _tus(self, sid, vid, body):
         """tus creation-with-upload: весь файл одним POST (как студийный клиент, chunkSize=∞)."""
-        b64 = lambda s: base64.b64encode(str(s).encode()).decode()
+        def b64(s):
+            return base64.b64encode(str(s).encode()).decode()
         meta = f"sessionId {b64(sid)},videoId {b64(vid)},userId {b64(self._channel_id())}"
-        body = open(path, "rb").read()
         head = {"User-Agent": WEB_UA, "Tus-Resumable": "1.0.0", "Origin": "https://studio.rutube.ru",
                 "Referer": "https://studio.rutube.ru/", "Content-Type": "application/offset+octet-stream",
                 "Upload-Length": str(len(body)), "Upload-Metadata": meta}
-        _, hd, _ = net.send(UPLOAD_URL + sid, self.source, method="POST", headers=head, data=body, where="tus")
+        _, hd, _ = net.send(UPLOAD_URL + sid, self.source, method="POST", headers=head,
+                            data=body, where="tus")
         got = int(hd.get("Upload-Offset", 0))
         if got != len(body):
             raise StudyError(self.source, f"загружено {got} из {len(body)} байт", code="upload")

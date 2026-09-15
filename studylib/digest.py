@@ -2,12 +2,12 @@
 
 Данные и рендер разделены: `--json` отдаёт ровно то, что видит рендер, без второго обхода API.
 """
-import re
+import contextlib
 import time
 
 from . import files, hosting, local
 from .config import Course, StudyError
-from .fmt import md_table, moment, plain, short_name, weekday
+from .fmt import md_table, moment, parse_name, plain, short_name, weekday
 from .snapshot import load_state, save_state
 
 # Что считаем новостью в core_course_get_updates_since; остальное (submissions, grades,
@@ -23,186 +23,179 @@ SUBMISSION = {"new": "не сдано", "draft": "черновик", "reopened":
 # Уведомления, которые Moodle шлёт сам: про наши же действия, про сроки (они уже в таблице)
 # и про входы в аккаунт. Отсев по eventtype, а не по теме: тема зависит от языка.
 AUTO_EVENTS = {"assign_due_soon", "assign_due_digest", "assign_notification", "newlogin"}
-URGENT = 2 * 86400
-MONTH = 30 * 86400
+DAY = 86400
+URGENT = 2 * DAY
+MONTH = 30 * DAY
 
 
-class Errors:
-    """Мягкие ошибки: копятся, не роняют сводку, но и не теряются."""
-
-    def __init__(self, strict=False):
-        self.items = []
-        self.strict = strict
-
-    def soft(self, where):
-        return _Soft(self, where)
-
-    def add(self, err, where=None):
-        item = err.as_dict()
-        if where:
-            item["where"] = where
-        self.items.append(item)
-
-
-class _Soft:
-    def __init__(self, errors, where):
-        self.errors, self.where = errors, where
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        if isinstance(exc, StudyError):
-            if self.errors.strict:
-                return False
-            self.errors.add(exc, self.where)
-            return True
-        return False
+@contextlib.contextmanager
+def soft(errors, where):
+    """Мягкая ошибка: копится в списке и не роняет сводку, но и не теряется."""
+    try:
+        yield
+    except StudyError as e:
+        errors.append({**e.as_dict(), "where": where})
 
 
 def lab_number(name):
-    """Номер лабы из названия задания — через ту же таблицу имён, что и `short_name`:
-    домашние работы и доклады каталога labNN не имеют."""
-    m = re.match(r"ЛР (\d+)$", short_name(name, tail=False))
-    return m.group(1).zfill(2) if m else None
+    """Номер лабы из названия задания (labNN); у домашних и докладов каталога нет."""
+    p = parse_name(name)
+    return p["num"].zfill(2) if p and p["work"] == "lab" else None
 
 
-def collect(cfg, moodle, days=None, save=True, strict=False, since=None):
-    """Всё, что знает ТУИС: дедлайны, тесты, обновления, уведомления, баллы.
+def by_due(items):
+    return sorted(items, key=lambda x: x["due"]["ts"])
 
-    `since` — что считать прошлым запуском, строка `--since` (см. `snapshot.load_state`)."""
-    now = int(time.time())
-    days = days or cfg.days()
-    errors = Errors(strict)
-    state = load_state(cfg, since)
-    since = state.get("last_run")
-    known = state.get("assignments", {})
-    graded = state.get("grades")  # {курс: {работа: балл}} с прошлого запуска; None — снимка ещё нет
 
-    mc = moodle.courses()
-    watch = {c.id: c for c in (cfg.courses() or cfg.track(mc))}
-    events = []
-    with errors.soft("календарь"):
-        events = moodle.calendar(now - 7 * 86400, now + 120 * 86400)
-    active = {(e.get("course") or {}).get("id") for e in events} - {None}
+class Collector:
+    """Один обход ТУИС. Каждый метод — раздел сводки; общее (окно, снимок, курсы) — в атрибутах."""
 
-    courses = [c for c in mc if c["id"] in (watch or active)]
-    cmap = {c["id"]: (watch[c["id"]].title if c["id"] in watch else c["fullname"])
-            for c in courses}
-    codes = {c["id"]: (watch[c["id"]].code if c["id"] in watch else None) for c in courses}
+    def __init__(self, cfg, moodle, days, state):
+        self.moodle = moodle
+        self.now = int(time.time())
+        self.days = days
+        self.horizon = self.now + days * DAY
+        self.since = state.get("last_run")            # None — первый запуск
+        self.known = state.get("assignments", {})     # id задания → срок с прошлого запуска
+        self.graded = state.get("grades")             # {курс: {работа: балл}}; None — снимка ещё нет
+        self.errors = []
+        self.courses = {c.id: c for c in cfg.track(moodle.courses())}
+        self.assigns = {}       # id задания → строка сводки (для снимка)
+        self.soon, self.overdue = [], []
+        self._contents = {}
 
-    def course_of(cid):
-        return {"id": cid, "code": codes.get(cid), "title": cmap.get(cid, "")}
+    def soft(self, where):
+        return soft(self.errors, where)
 
-    # --- задания
-    assigns, soon, overdue, new_assigns, moved = {}, [], [], [], []
-    course_list, _ = moodle.assignments()
-    for c in course_list:
-        if c["id"] not in cmap:
-            continue
-        for a in c["assignments"]:
-            item = {"kind": "assign", "source": "assign_api", "assign_id": a["id"],
-                    "cmid": a["cmid"], "course": course_of(c["id"]), "name": a["name"],
-                    "short": short_name(a["name"]), "due": moment(a.get("duedate"), now),
-                    "submission": None, "intro": plain(a.get("intro")),
-                    "lab": lab_number(a["name"])}
-            assigns[str(a["id"])] = item
-            due = a.get("duedate") or 0
-            prev = known.get(str(a["id"]))
-            if since and prev is None:
-                new_assigns.append(item)
-            elif prev is not None and due and prev != due:
-                moved.append({**item, "was": moment(prev, now)})
-            if not due:
+    def course(self, cid):
+        c = self.courses.get(cid)
+        return c.as_dict() if c else {"id": cid, "code": None, "title": ""}
+
+    def contents(self, cid):
+        """Состав курса; неудача запоминается, чтобы не ходить и не жаловаться дважды."""
+        if cid not in self._contents:
+            self._contents[cid] = []
+            with self.soft(f"состав курса {cid}"):
+                self._contents[cid] = self.moodle.contents(cid)
+        return self._contents[cid]
+
+    def within(self, ts):
+        return self.now <= ts <= self.horizon
+
+    # --- разделы
+
+    def assignments(self):
+        """Задания из mod_assign: сроки в окне и просроченные; новые и сдвинутые — против снимка."""
+        new, moved = [], []
+        course_list, _ = self.moodle.assignments()
+        for c in course_list:
+            if c["id"] not in self.courses:
                 continue
-            if now <= due <= now + days * 86400:
-                soon.append(item)
-            elif due < now <= due + 30 * 86400:
-                overdue.append(item)
-
-    for item in sorted(soon + overdue, key=lambda x: x["due"]["ts"]):
-        with errors.soft(f"статус задания {item['assign_id']}"):
-            st = moodle.submission_status(item["assign_id"])
-            sub = (st.get("lastattempt") or {}).get("submission") or {}
-            item["submission"] = sub.get("status") or "new"
-            item["grade"] = ((st.get("feedback") or {}).get("grade") or {}).get("grade")
-
-    # --- элементы курса со сроками: ловят задания, скрытые ограничением доступа.
-    # Статус ответа у них не запросить (requireloginerror), поэтому сразу "hidden".
-    contents_cache = {}
-
-    def contents(cid):
-        if cid not in contents_cache:
-            contents_cache[cid] = []
-            with errors.soft(f"состав курса {cid}"):
-                contents_cache[cid] = moodle.contents(cid)
-        return contents_cache[cid]
-
-    seen = {a["cmid"] for a in assigns.values()}
-    for c in courses:
-        for sec in contents(c["id"]):
-            for m in sec.get("modules", []):
-                if m["id"] in seen or m["modname"] not in KINDS:
+            for a in c["assignments"]:
+                item = {"kind": "assign", "source": "assign_api", "assign_id": a["id"],
+                        "cmid": a["cmid"], "course": self.course(c["id"]), "name": a["name"],
+                        "short": short_name(a["name"]), "due": moment(a.get("duedate"), self.now),
+                        "submission": None, "intro": plain(a.get("intro")),
+                        "lab": lab_number(a["name"])}
+                self.assigns[str(a["id"])] = item
+                due = a.get("duedate") or 0
+                prev = self.known.get(str(a["id"]))
+                if self.since and prev is None:
+                    new.append(item)
+                elif prev is not None and due and prev != due:
+                    moved.append({**item, "was": moment(prev, self.now)})
+                if not due:
                     continue
-                for d in m.get("dates") or []:
-                    if d.get("dataid") not in DATE_IDS:
-                        continue
-                    ts = d.get("timestamp") or 0
-                    if now <= ts <= now + days * 86400:
-                        soon.append({"kind": "activity", "source": "course_contents",
-                                     "modname": m["modname"], "cmid": m["id"],
-                                     "course": course_of(c["id"]), "name": m["name"],
-                                     "short": short_name(m["name"]), "due": moment(ts, now),
-                                     "submission": "hidden" if m["modname"] == "assign" else None,
-                                     "intro": "", "lab": lab_number(m["name"])})
+                if self.within(due):
+                    self.soon.append(item)
+                elif due < self.now <= due + MONTH:
+                    self.overdue.append(item)
 
-    # --- выбор темы доклада: сам срок ничего не говорит, важно, выбрана ли тема
-    picks = [a for a in soon if a.get("modname") == "choice"]
-    if picks:
+        for item in by_due(self.soon + self.overdue):
+            with self.soft(f"статус задания {item['assign_id']}"):
+                st = self.moodle.submission_status(item["assign_id"])
+                sub = (st.get("lastattempt") or {}).get("submission") or {}
+                item["submission"] = sub.get("status") or "new"
+                item["grade"] = ((st.get("feedback") or {}).get("grade") or {}).get("grade")
+        return new, moved
+
+    def activities(self):
+        """Элементы курса со сроками — ловят задания, скрытые ограничением доступа.
+        Статус ответа у них не запросить (requireloginerror), поэтому сразу "hidden"."""
+        seen = {a["cmid"] for a in self.assigns.values()}
+        for cid in self.courses:
+            for sec in self.contents(cid):
+                for m in sec.get("modules", []):
+                    if m["id"] in seen or m["modname"] not in KINDS:
+                        continue
+                    for d in m.get("dates") or []:
+                        ts = d.get("timestamp") or 0
+                        if d.get("dataid") in DATE_IDS and self.within(ts):
+                            self.soon.append({
+                                "kind": "activity", "source": "course_contents",
+                                "modname": m["modname"], "cmid": m["id"],
+                                "course": self.course(cid), "name": m["name"],
+                                "short": short_name(m["name"]), "due": moment(ts, self.now),
+                                "submission": "hidden" if m["modname"] == "assign" else None,
+                                "intro": "", "lab": lab_number(m["name"])})
+
+    def choices(self):
+        """Выбор темы доклада: сам срок ничего не говорит, важно, выбрана ли тема."""
+        picks = [a for a in self.soon if a.get("modname") == "choice"]
+        if not picks:
+            return
         by_cmid = {}
-        with errors.soft("темы докладов"):
+        with self.soft("темы докладов"):
             by_cmid = {c["coursemodule"]: c["id"]
-                       for c in moodle.choices({a["course"]["id"] for a in picks})}
+                       for c in self.moodle.choices({a["course"]["id"] for a in picks})}
         for a in picks:
             cid = by_cmid.get(a["cmid"])
             if not cid:
                 continue
-            with errors.soft(f"варианты выбора {cid}"):
-                opts = moodle.choice_options(cid)
+            with self.soft(f"варианты выбора {cid}"):
+                opts = self.moodle.choice_options(cid)
                 mine = [o["text"] for o in opts if o.get("checked")]
                 a["choice"] = {"chosen": mine[0] if mine else None, "options": len(opts)}
                 a["submission"] = "submitted" if mine else "new"
 
-    # --- тесты
-    quizzes = []
-    with errors.soft("тесты"):
-        for q in moodle.quizzes([c["id"] for c in courses]):
-            close = q.get("timeclose") or 0
-            if not close or close < now:
-                continue
-            used = None
-            with errors.soft(f"попытки теста {q['id']}"):
-                used = len(moodle.quiz_attempts(q["id"]))
-            quizzes.append({"kind": "quiz", "source": "quiz", "quiz_id": q["id"],
-                            "course": course_of(q["course"]), "name": q["name"],
-                            "short": short_name(q["name"]),
-                            "due": moment(close, now), "attempts_used": used,
-                            "attempts_max": q.get("attempts") or None,
-                            "timelimit_min": (q.get("timelimit") or 0) // 60 or None})
-    soon += [q for q in quizzes if q["due"]["ts"] <= now + days * 86400]
-    ahead = [q for q in quizzes if q["due"]["ts"] > now + days * 86400]
+    def quizzes(self):
+        """Тесты с открытым сроком: в окне — в общую таблицу, дальше — отдельным списком."""
+        ahead = []
+        with self.soft("тесты"):
+            for q in self.moodle.quizzes(list(self.courses)):
+                close = q.get("timeclose") or 0
+                if not close or close < self.now:
+                    continue
+                tries = None
+                with self.soft(f"попытки теста {q['id']}"):
+                    tries = self.moodle.quiz_attempts(q["id"])
+                states = [t.get("state") for t in tries or []]
+                # finished — тест сдан, как задание со статусом submitted; inprogress/overdue —
+                # начат, но не отправлен: это важнее срока
+                item = {"kind": "quiz", "source": "quiz", "quiz_id": q["id"],
+                        "course": self.course(q["course"]), "name": q["name"],
+                        "short": short_name(q["name"]), "due": moment(close, self.now),
+                        "submission": "submitted" if "finished" in states else None,
+                        "open_attempt": any(st in ("inprogress", "overdue") for st in states),
+                        "attempts_used": None if tries is None else len(tries),
+                        "attempts_max": q.get("attempts") or None,
+                        "timelimit_min": (q.get("timelimit") or 0) // 60 or None}
+                (self.soon if close <= self.horizon else ahead).append(item)
+        return ahead
 
-    # --- обновления в курсах
-    updates = []
-    if since:
-        for c in courses:
+    def updates(self):
+        """Что изменилось в курсах с прошлого запуска — с именами новых файлов."""
+        out = []
+        if not self.since:
+            return out
+        for cid in self.courses:
             changed = []
-            with errors.soft(f"обновления курса {c['id']}"):
-                changed = [u for u in moodle.updates_since(c["id"], since) if u.get("updates")]
+            with self.soft(f"обновления курса {cid}"):
+                changed = [u for u in self.moodle.updates_since(cid, self.since) if u.get("updates")]
             if not changed:
                 continue
             names = {m["id"]: (m["name"], m["modname"], sec["name"], m.get("contents") or [])
-                     for sec in contents(c["id"]) for m in sec.get("modules", [])}
+                     for sec in self.contents(cid) for m in sec.get("modules", [])}
             for u in changed:
                 kinds = {x["name"] for x in u["updates"]} & USEFUL
                 if not kinds:
@@ -212,87 +205,115 @@ def collect(cfg, moodle, days=None, save=True, strict=False, since=None):
                 # имена файлов — чтобы сводка говорила «появился 002-dns.pdf», а не «новые файлы»
                 new_files = [i["filename"] for i in items
                              if i.get("type") == "file" and i.get("filesize")
-                             and (i.get("timemodified") or 0) > since]
-                updates.append({"course": course_of(c["id"]), "section": section,
-                                "item": name, "modname": modname, "files": new_files,
-                                "what": "новые файлы" if kinds & FILES else "изменены настройки"})
+                             and (i.get("timemodified") or 0) > self.since]
+                out.append({"course": self.course(cid), "section": section,
+                            "item": name, "modname": modname, "files": new_files,
+                            "what": "новые файлы" if kinds & FILES else "изменены настройки"})
+        return out
 
-    # --- уведомления, баллы, курсы вне списка
-    # Показываются один раз — те, что пришли после прошлого запуска, как и обновления курсов.
-    notifications = []
-    with errors.soft("уведомления"):
-        for m in moodle.notifications(limit=20):
-            if m["timecreated"] > (since or 0) and m.get("eventtype") not in AUTO_EVENTS:
-                notifications.append({"id": m["id"], "at": moment(m["timecreated"], now),
-                                      "subject": plain(m.get("subject"), 120)})
-    notifications.sort(key=lambda n: -n["at"]["ts"])
+    def notifications(self):
+        """Непрочитанные уведомления, пришедшие после прошлого запуска, без автоматических."""
+        out = []
+        with self.soft("уведомления"):
+            for m in self.moodle.notifications(limit=20):
+                if m["timecreated"] > (self.since or 0) and m.get("eventtype") not in AUTO_EVENTS:
+                    out.append({"id": m["id"], "at": moment(m["timecreated"], self.now),
+                                "subject": plain(m.get("subject"), 120)})
+        return sorted(out, key=lambda n: -n["at"]["ts"])
 
-    # Баллы: итог по курсу и то, что появилось или изменилось с прошлого запуска.
-    grades = []
-    for c in courses:
-        with errors.soft(f"оценки, курс {c['id']}"):
-            for t in moodle.grades(c["id"]):
-                got = [i for i in t.get("gradeitems", [])
-                       if i.get("graderaw") is not None and i.get("itemtype") != "course"]
-                total = next((i for i in t.get("gradeitems", [])
-                              if i.get("itemtype") == "course"), None)
-                if not got:
-                    continue
-                # Итог курса Moodle может прятать; тогда считаем сумму работ сами.
-                raw = total.get("graderaw") if total else None
-                tot = ({"raw": raw, "max": total["grademax"], "computed": False}
-                       if raw is not None else
-                       {"raw": sum(i["graderaw"] for i in got),
-                        "max": (total or {}).get("grademax") or sum(i["grademax"] for i in got),
-                        "computed": True})
-                before = (graded or {}).get(str(c["id"]), {})
-                items = [{"name": i["itemname"], "short": short_name(i["itemname"], tail=False),
-                          "raw": i["graderaw"], "max": i["grademax"],
-                          "new": graded is not None and before.get(i["itemname"]) != i["graderaw"]}
-                         for i in got]
-                grades.append({"course": course_of(c["id"]), "items": items, "total": tot})
+    def grades(self):
+        """Баллы: итог по курсу и то, что появилось или изменилось с прошлого запуска."""
+        out = []
+        for cid in self.courses:
+            with self.soft(f"оценки, курс {cid}"):
+                for t in self.moodle.grades(cid):
+                    got = [i for i in t.get("gradeitems", [])
+                           if i.get("graderaw") is not None and i.get("itemtype") != "course"]
+                    if not got:
+                        continue
+                    total = next((i for i in t.get("gradeitems", [])
+                                  if i.get("itemtype") == "course"), None)
+                    # Итог курса Moodle может прятать; тогда считаем сумму работ сами.
+                    raw = total.get("graderaw") if total else None
+                    tot = ({"raw": raw, "max": total["grademax"], "computed": False}
+                           if raw is not None else
+                           {"raw": sum(i["graderaw"] for i in got),
+                            "max": (total or {}).get("grademax") or sum(i["grademax"] for i in got),
+                            "computed": True})
+                    before = (self.graded or {}).get(str(cid), {})
+                    items = [{"name": i["itemname"], "short": short_name(i["itemname"], tail=False),
+                              "raw": i["graderaw"], "max": i["grademax"],
+                              "new": self.graded is not None
+                              and before.get(i["itemname"]) != i["graderaw"]}
+                             for i in got]
+                    out.append({"course": self.course(cid), "items": items, "total": tot})
+        return out
 
-    outside = {}
-    for e in events:
-        c = e.get("course") or {}
-        if c.get("id") and c["id"] not in cmap and now <= e.get("timesort", 0) <= now + days * 86400:
-            key = (c["id"], c.get("fullname") or c.get("shortname"))
-            outside.setdefault(key, []).append(e)
+    def outside(self):
+        """Сроки по календарю у курсов вне списка: в игноре или скрытых."""
+        events = []
+        with self.soft("календарь"):
+            events = self.moodle.calendar(self.now - 7 * DAY, self.now + 120 * DAY)
+        groups = {}
+        for e in events:
+            c = e.get("course") or {}
+            if c.get("id") and c["id"] not in self.courses and self.within(e.get("timesort", 0)):
+                groups.setdefault((c["id"], c.get("fullname") or c.get("shortname")), []).append(e)
+        return [{"course": {"id": cid, "title": name}, "count": len(evs),
+                 "nearest": {"name": (min(evs, key=lambda x: x["timesort"])["name"] or "")[:60],
+                             "at": moment(min(e["timesort"] for e in evs), self.now)}}
+                for (cid, name), evs in groups.items()]
 
-    deadlines = sorted(soon, key=lambda x: x["due"]["ts"])
-    data = {
-        "schema": 1, "now": moment(now, now), "days": days,
-        "first_run": not since, "since": moment(since, now) if since else None,
-        "courses": [course_of(c["id"]) for c in courses],
-        "deadlines": deadlines,
-        "overdue": sorted([a for a in overdue if a["submission"] in ("new", None)],
-                          key=lambda x: x["due"]["ts"]),
-        "submitted": sorted([a for a in overdue if a["submission"] not in ("new", None)],
-                            key=lambda x: x["due"]["ts"]),
-        # просроченное и несданное — впереди: пересдача всё ещё стоит баллов
-        "not_started": [a for a in sorted(overdue, key=lambda x: x["due"]["ts"]) + deadlines
-                        if a["source"] == "assign_api" and a["submission"] == "new"],
-        "quizzes_ahead": sorted(ahead, key=lambda x: x["due"]["ts"]),
-        "updates": updates, "new_assignments": new_assigns, "moved": moved,
-        "notifications": notifications, "grades": grades,
-        "outside": [{"course": {"id": cid, "title": name},
-                     "count": len(evs),
-                     "nearest": {"name": (min(evs, key=lambda x: x["timesort"])["name"] or "")[:60],
-                                 "at": moment(min(e["timesort"] for e in evs), now)}}
-                    for (cid, name), evs in outside.items()],
-        "errors": errors.items,
-    }
+    # --- сборка
 
-    if save:
-        save_state(cfg, {
-            "last_run": now,
-            "assignments": {i: (a["due"]["ts"] if a["due"] else 0) for i, a in assigns.items()},
-            "courses": {str(c["id"]): c["fullname"] for c in courses},
+    def run(self):
+        new, moved = self.assignments()
+        self.activities()
+        self.choices()
+        ahead = self.quizzes()
+        deadlines = by_due(self.soon)
+        overdue = by_due(self.overdue)
+        return {
+            "schema": 1, "now": moment(self.now, self.now), "days": self.days,
+            "first_run": not self.since,
+            "since": moment(self.since, self.now) if self.since else None,
+            "courses": [c.as_dict() for c in self.courses.values()],
+            "deadlines": deadlines,
+            "overdue": [a for a in overdue if a["submission"] in ("new", None)],
+            "submitted": [a for a in overdue if a["submission"] not in ("new", None)],
+            # просроченное и несданное — впереди: пересдача всё ещё стоит баллов
+            "not_started": [a for a in overdue + deadlines
+                            if a["source"] == "assign_api" and a["submission"] == "new"],
+            "quizzes_ahead": by_due(ahead),
+            "updates": self.updates(), "new_assignments": new, "moved": moved,
+            "notifications": self.notifications(), "grades": self.grades(),
+            "outside": self.outside(),
+            "errors": self.errors,
+        }
+
+    def snapshot(self, data):
+        """Что запомнить до следующего запуска."""
+        return {
+            "last_run": self.now,
+            "assignments": {i: (a["due"]["ts"] if a["due"] else 0) for i, a in self.assigns.items()},
+            "courses": {str(c.id): c.title for c in self.courses.values()},
             "grades": {str(g["course"]["id"]): {i["name"]: i["raw"] for i in g["items"]}
-                       for g in grades},
-        })
+                       for g in data["grades"]},
+        }
+
+
+def collect(cfg, moodle, days=None, save=True, since=None):
+    """Всё, что знает ТУИС: дедлайны, тесты, обновления, уведомления, баллы.
+
+    `since` — что считать прошлым запуском, строка `--since` (см. `snapshot.load_state`)."""
+    c = Collector(cfg, moodle, days or cfg.days(), load_state(cfg, since))
+    data = c.run()
+    if save:
+        save_state(cfg, c.snapshot(data))
     return data
 
+
+# --- рендер
 
 def attempts(q):
     used = q["attempts_used"] if q["attempts_used"] is not None else "?"
@@ -308,7 +329,8 @@ def status_of(a):
                 else "не выбрана, %d вариантов" % pick["options"])
     if a["kind"] == "quiz":
         lim = ", %d мин" % a["timelimit_min"] if a["timelimit_min"] else ""
-        return "попыток " + attempts(a) + lim
+        head = "начат, не отправлен; " if a["open_attempt"] else ""
+        return head + "попыток " + attempts(a) + lim
     if a["submission"] is None:
         # статус не получен (ошибка в errors) или элемент без ответа: опрос, взаимная проверка
         return KINDS.get(a.get("modname"), "?") if a["kind"] == "activity" else "?"
@@ -316,12 +338,33 @@ def status_of(a):
 
 
 def label(a):
-    """Курс в таблице: код из config.env, а без него — название из ТУИС."""
+    """Курс в таблице: имя папки из config.env, а без него — название из ТУИС."""
     return a["course"]["code"] or a["course"]["title"]
 
 
 def bold(cells):
     return ["**%s**" % c if c not in ("", "—") else c for c in cells]
+
+
+def when(m):
+    return m["text"] if m else "—"
+
+
+def repo_trouble(c):
+    """Неполадки репозитория курса — одной строкой, только когда они есть."""
+    repo = c["repo"]
+    if not repo:
+        return None
+    bad = []
+    if repo["dirty"]:
+        bad.append("незакоммичено %d" % len(repo["dirty"]))
+    for u in c["unreleased_tags"]:
+        bad.append("нет релиза на %s (%s)" % (u["hosting"], ", ".join(u["tags"])))
+    for name, r in c["releases"].items():
+        latest = r.get("latest")
+        if latest and not latest.get("assets"):
+            bad.append("релиз %s на %s без файлов" % (latest["tag"], name))
+    return "%s: %s" % (c["code"], ", ".join(bad)) if bad else None
 
 
 def render(d):
@@ -341,26 +384,23 @@ def render(d):
         elif u["course"]["code"]:
             files_ = ", ".join(u["files"]) + " — не скачаны"
         else:
-            files_ = ", ".join(u["files"]) + " — курса нет в config.env"
+            files_ = ", ".join(u["files"]) + " — у курса нет папки (CODE в config.env)"
         news.append([label(u), u["section"] or "—", "%s: %s" % (u["item"], u["what"]), files_])
     for a in t.get("new_assignments", []):
-        news.append([label(a), "—",
-                     "новое задание: %s, до %s" % (a["short"], a["due"]["text"] if a["due"] else "—"),
-                     "—"])
+        news.append([label(a), "—", "новое задание: %s, до %s" % (a["short"], when(a["due"])), "—"])
     for a in t.get("moved", []):
-        news.append([label(a), "—",
-                     "срок сдвинут: %s, было %s → стало %s" % (
-                         a["short"], a["was"]["text"] if a["was"] else "—",
-                         a["due"]["text"] if a["due"] else "—"), "—"])
+        news.append([label(a), "—", "срок сдвинут: %s, было %s → стало %s" % (
+            a["short"], when(a["was"]), when(a["due"])), "—"])
 
     rows = []
     for a in t.get("overdue", []):
         rows.append(bold([a["due"]["text"], "просрочено", a["short"], label(a), status_of(a)]))
     for a in t.get("deadlines", []):
-        if a.get("submission") == "submitted":  # у тестов ключа нет
+        if a["submission"] == "submitted":
             continue
         cells = [a["due"]["text"], a["due"]["left"], a["short"], label(a), status_of(a)]
-        rows.append(bold(cells) if a["due"]["left_sec"] < URGENT else cells)
+        urgent = a["due"]["left_sec"] < URGENT or a.get("open_attempt")
+        rows.append(bold(cells) if urgent else cells)
     if rows:
         out.append("\n## Сроки\n")
         out.append(md_table(rows, ["Когда", "Осталось", "Работа", "Курс", "Состояние"]))
@@ -370,23 +410,7 @@ def render(d):
         out.append("\nСроков в ближайшие %d дн нет.%s" % (
             d["days"], "" if news or t.get("first_run") else " Обновлений нет."))
 
-    # Неполадки репозитория — одной строкой на курс и только когда они есть.
-    trouble = []
-    for c in d["courses"]:
-        repo = c["repo"]
-        if not repo:
-            continue
-        bad = []
-        if repo["dirty"]:
-            bad.append("незакоммичено %d" % len(repo["dirty"]))
-        for u in c["unreleased_tags"]:
-            bad.append("нет релиза на %s (%s)" % (u["hosting"], ", ".join(u["tags"])))
-        for name, r in c["releases"].items():
-            latest = r.get("latest")
-            if latest and not latest.get("assets"):
-                bad.append("релиз %s на %s без файлов" % (latest["tag"], name))
-        if bad:
-            trouble.append("%s: %s" % (c["code"], ", ".join(bad)))
+    trouble = [s for s in map(repo_trouble, d["courses"]) if s]
     if trouble:
         out.append("\n" + "; ".join(trouble) + ".")
 
@@ -408,7 +432,8 @@ def render(d):
         out.append("\n## Новое в курсах\n")
         out.append(md_table(news, ["Курс", "Раздел", "Что", "Файлы"]))
 
-    quizzes = [q for q in t.get("quizzes_ahead", []) if q["due"]["left_sec"] < MONTH]
+    quizzes = [q for q in t.get("quizzes_ahead", [])
+               if q["due"]["left_sec"] < MONTH and q["submission"] != "submitted"]
     if quizzes:
         out.append("\n## Тесты\n")
         out.append(md_table(
@@ -421,7 +446,8 @@ def render(d):
         out.append(md_table([[o["nearest"]["at"]["text"], o["nearest"]["name"],
                               "%s (id %d, ещё %d)" % (o["course"]["title"], o["course"]["id"], o["count"])]
                              for o in t["outside"]], ["Когда", "Работа", "Курс"]))
-        out.append("\nДобавить курс в `config.env` или убедиться, что он неактуален.")
+        out.append("\nКурс в COURSE_IGNORE или скрыт в ТУИС: убрать из игнора "
+                   "(`study courses --setup`) или убедиться, что он неактуален.")
 
     todo = t.get("not_started") or []
     if todo:
@@ -439,74 +465,78 @@ def render_digest(d):
     return render({"now": d["now"], "days": d["days"], "tuis": d, "courses": []})
 
 
-def state(cfg, moodle, days=None, with_tuis=True, save=True, pull=False, strict=False,
-          since=None):
+# --- состояние локальных репозиториев
+
+def pull_updates(cfg, moodle, tuis, errors):
+    """Забрать файлы, о которых сообщила сводка; в каждой строке `updates` пометить скачанное."""
+    # `since` берётся из сводки: снимок состояния к этому моменту уже сдвинут на «сейчас»
+    since = (tuis["since"] or {}).get("ts", 0)
+    for c in tuis["courses"]:
+        todo = [u for u in tuis["updates"] if u["files"] and u["course"]["id"] == c["id"]]
+        if not todo or not c["code"]:
+            continue
+        course = Course(c["id"], c["code"], c["title"])
+        with soft(errors, f"файлы, курс {c['code']}"):
+            got = files.pull(moodle, files.listing(cfg, moodle, course, since=since))
+            names = [g["name"] for g in got["pulled"]]
+            for u in todo:
+                u["pulled"] = [n for n in u["files"] if n in names]
+            errors.extend(got["errors"])
+
+
+def course_state(cfg, course, by_lab, errors):
+    """Курс на диске: git, релизы на хостингах, лабы с их готовностью и парой в ТУИС."""
+    item = {**course.as_dict(), "dir": str(course.dir), "repo": None,
+            "releases": {}, "unreleased_tags": [], "labs": []}
+    repo = local.course_repo(course.code)
+    if not repo:
+        return item
+    item["repo"] = local.repo_state(repo)
+    item["repo"]["remotes"] = {}
+    for cls in hosting.HOSTS.values():
+        item["repo"]["remotes"][cls.source] = local.repo_from_remote(repo, cls.remote, cls.host) or None
+        item["releases"][cls.source] = {"ok": False, "latest": None}
+        with soft(errors, f"{cls.source}, курс {course.code}"):
+            rels = cls(cfg, path=repo).releases()
+            tags = [r["tag"] for r in rels]
+            item["releases"][cls.source] = {"ok": True, "latest": rels[0] if rels else None,
+                                            "tags": tags}
+            missing = [t for t in item["repo"]["tags"] if t not in tags]
+            if missing:
+                item["unreleased_tags"].append({"hosting": cls.source, "tags": missing})
+    for lab in local.labs(repo, course.code):
+        found = by_lab.get((course.code, lab["num"]))
+        lab["tuis"] = ({"assign_id": found["assign_id"], "name": found["name"],
+                        "due": found["due"], "submission": found["submission"],
+                        "matched_by": "number"} if found else None)
+        lab["ready"] = {
+            "report": lab["report"]["built"],
+            "presentation": lab["presentation"]["built"],
+            "videos": lab["videos"]["filled"] == lab["videos"]["total"],
+            "submitted": bool(found and found["submission"] == "submitted"),
+        }
+        item["labs"].append(lab)
+    return item
+
+
+def state(cfg, moodle, days=None, with_tuis=True, save=True, pull=False, since=None):
     """Сводка ТУИС плюс состояние локальных репозиториев — всё одним объектом."""
-    errors = Errors(strict)
-    tracked = list(cfg.courses())
+    errors = []
     tuis = None
     if with_tuis:
-        tuis = collect(cfg, moodle, days=days, save=save, strict=strict, since=since)
-        if not tracked:   # авто-режим: берём набор из сводки (записи минус игнор)
-            tracked = [Course(c["id"], c["code"] or "-", c["title"]) for c in tuis.get("courses", [])]
+        tuis = collect(cfg, moodle, days=days, save=save, since=since)
         if pull:
-            # `since` берётся из сводки: снимок состояния к этому моменту уже сдвинут на «сейчас»
-            since = (tuis["since"] or {}).get("ts", 0)
-            for course in tracked:
-                todo = [u for u in tuis["updates"] if u["files"] and u["course"]["id"] == course.id]
-                if not todo or not course.code:
-                    continue
-                with errors.soft(f"файлы, курс {course.code}"):
-                    got = files.pull(moodle, files.listing(cfg, moodle, course, since=since))
-                    names = [g["name"] for g in got["pulled"]]
-                    for u in todo:
-                        u["pulled"] = [n for n in u["files"] if n in names]
-                    errors.items.extend(got["errors"])
+            pull_updates(cfg, moodle, tuis, errors)
 
-    by_lab = {}
+    # Пара «лаба на диске ↔ задание в ТУИС» — по номеру в названии задания.
     t = tuis or {}
-    for a in t.get("deadlines", []) + t.get("submitted", []):
-        if a.get("lab") and a["course"].get("code"):
-            by_lab[(a["course"]["code"], a["lab"])] = a
-
-    courses = []
-    for course in tracked:
-        if not course.code:
-            continue
-        repo = local.course_repo(course.code)
-        item = {**course.as_dict(), "dir": str(course.dir), "repo": None,
-                "releases": {}, "unreleased_tags": [], "labs": []}
-        if repo:
-            item["repo"] = local.repo_state(repo)
-            published = {}
-            for name, client in hosting.both(cfg, path=repo).items():
-                if isinstance(client, StudyError):
-                    errors.add(client, f"{name}, курс {course.code}")
-                    item["releases"][name] = {"ok": False, "latest": None}
-                    continue
-                with errors.soft(f"{name}, курс {course.code}"):
-                    rels = client.releases()
-                    published[name] = {r["tag"] for r in rels}
-                    item["releases"][name] = {"ok": True, "latest": rels[0] if rels else None,
-                                              "tags": [r["tag"] for r in rels]}
-            for name, tags in published.items():
-                missing = [t for t in item["repo"]["tags"] if t not in tags]
-                if missing:
-                    item["unreleased_tags"].append({"hosting": name, "tags": missing})
-            for lab in local.labs(repo, course.code):
-                found = by_lab.get((course.code, lab["num"]))
-                lab["tuis"] = ({"assign_id": found["assign_id"], "name": found["name"],
-                                "due": found["due"], "submission": found["submission"],
-                                "matched_by": "number"} if found else None)
-                lab["ready"] = {
-                    "report": lab["report"]["built"],
-                    "presentation": lab["presentation"]["built"],
-                    "videos": lab["videos"]["filled"] == lab["videos"]["total"],
-                    "submitted": bool(found and found["submission"] == "submitted"),
-                }
-                item["labs"].append(lab)
-        courses.append(item)
+    by_lab = {(a["course"]["code"], a["lab"]): a
+              for a in t.get("deadlines", []) + t.get("overdue", []) + t.get("submitted", [])
+              if a.get("lab") and a["course"].get("code")}
+    titles = {c["id"]: c["title"] for c in t.get("courses", [])}
+    courses = [course_state(cfg, Course(cid, code, titles.get(cid, "")), by_lab, errors)
+               for cid, code in cfg.codes().items()]
 
     return {"schema": 1, "now": moment(int(time.time())), "days": days or cfg.days(),
             "tuis": tuis, "courses": courses,
-            "errors": errors.items + ((tuis or {}).get("errors") or [])}
+            "errors": errors + t.get("errors", [])}

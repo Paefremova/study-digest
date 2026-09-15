@@ -1,4 +1,4 @@
-"""GitVerse и SourceCraft за одним интерфейсом. Подробности — в ../hosting-api.md."""
+"""GitVerse и SourceCraft за одним интерфейсом. Подробности — в ../docs/hosting-api.md."""
 import mimetypes
 import pathlib
 
@@ -7,31 +7,37 @@ from .config import StudyError
 
 
 class Hosting:
-    """Общий интерфейс: releases(), release(), asset(), web_url()."""
+    """Общий интерфейс: releases(), release(), update(), asset(), web_url()."""
 
-    name = ""
-    source = ""
-    token_key = ""
-    repo_key = ""
-    remote = ""
-    host = ""
+    key = ""        # имя подкоманды: gv | sc
+    source = ""     # метка ошибок и ключ в JSON: gitverse | sourcecraft
+    token = ""      # имя токена в config.env
+    repo_key = ""   # GV_REPO | SC_REPO — репозиторий по умолчанию
+    remote = ""     # имя git-remote, по которому определяется репозиторий
+    host = ""       # домен: подстрока адреса remote (чужой хостинг под тем же именем не считается)
+    web = ""        # адрес сайта
+    base = ""       # адрес API
 
-    def __init__(self, cfg, repo=None, path=None):
+    def __init__(self, cfg, path=None, repo=None):
+        """Репозиторий: явный → из remote каталога `path` → `repo_key` в config.env."""
         self.cfg = cfg
         self.path = pathlib.Path(path) if path else None
-        self.repo = repo or cfg.get(self.repo_key) or (
-            local.repo_from_remote(self.path, self.remote, self.host) if self.path else "")
+        self.repo = repo or (self.path and local.repo_from_remote(self.path, self.remote, self.host)) \
+            or cfg.get(self.repo_key)
         if not self.repo:
             raise StudyError(self.source,
-                             f"репозиторий не задан: {self.repo_key} в config.env "
-                             f"или запуск из каталога репозитория (remote {self.remote})")
+                             f"репозиторий не задан: запуск из каталога репозитория "
+                             f"(remote {self.remote}) или {self.repo_key} в config.env")
 
     def headers(self):
-        return {"Authorization": "Bearer " + self.cfg.token(self.token_key)}
+        return {"Authorization": "Bearer " + self.cfg.token(self.token)}
 
     def api(self, path, **kw):
         kw.setdefault("headers", {}).update(self.headers())
         return net.request(self.base + path, self.source, where=path, **kw)
+
+    def repo_url(self):
+        return f"{self.web}/{self.repo}"
 
     @staticmethod
     def _file(path):
@@ -41,12 +47,13 @@ class Hosting:
 
 
 class GitVerse(Hosting):
-    name = "GitVerse"
+    key = "gv"
     source = "gitverse"
-    token_key = "GITVERSE_TOKEN_FILE"
+    token = "GITVERSE_TOKEN"
     repo_key = "GV_REPO"
     remote = "origin"
     host = "gitverse.ru"
+    web = "https://gitverse.ru"
     base = "https://api.gitverse.ru"
 
     def headers(self):
@@ -94,16 +101,17 @@ class GitVerse(Hosting):
         return {"name": name, "ok": True}
 
     def web_url(self, tag):
-        return f"https://gitverse.ru/{self.repo}/releases/tag/{tag}"
+        return f"{self.repo_url()}/releases/tag/{tag}"
 
 
 class SourceCraft(Hosting):
-    name = "SourceCraft"
+    key = "sc"
     source = "sourcecraft"
-    token_key = "SOURCECRAFT_TOKEN_FILE"
+    token = "SOURCECRAFT_TOKEN"
     repo_key = "SC_REPO"
     remote = "src"
-    host = "sourcecraft"
+    host = "sourcecraft.dev"
+    web = "https://sourcecraft.dev"
     base = "https://api.sourcecraft.tech"
 
     def releases(self):
@@ -116,15 +124,15 @@ class SourceCraft(Hosting):
     def localize(self, notes):
         """CHANGELOG ссылается на GitVerse (repository в package.json); в заметках
         SourceCraft подменяем хост и владельца — путь /commit/<sha> у обоих один."""
-        gv = self.path and local.repo_from_remote(self.path, "origin", "gitverse.ru")
+        gv = self.path and local.repo_from_remote(self.path, GitVerse.remote, GitVerse.host)
         if gv:
-            notes = notes.replace(f"https://gitverse.ru/{gv}", f"https://sourcecraft.dev/{self.repo}")
+            notes = notes.replace(f"{GitVerse.web}/{gv}", self.repo_url())
         return notes
 
     def release(self, tag, title, notes, sha=None, branch=None):
         """REST вместо CLI src. target_branch заставляет SourceCraft создать тег самому
         и даёт 409 BranchAlreadyExists, если тег уже запушен; по нашему порядку тег
-        всегда есть, поэтому поле передаём только по явной просьбе."""
+        всегда есть, поэтому поле передаём только по явной просьбе. `sha` не нужен."""
         body = {"tag": tag, "title": title, "release_notes": self.localize(notes), "publish": True}
         if branch:
             body["target_branch"] = branch
@@ -146,15 +154,7 @@ class SourceCraft(Hosting):
         return {"name": name or fname, "ok": True}
 
     def web_url(self, tag):
-        return f"https://sourcecraft.dev/{self.repo}/releases/{tag}"
+        return f"{self.repo_url()}/releases/{tag}"
 
 
-def both(cfg, path=None):
-    """Пара хостингов для репозитория; недоступный отдаётся ошибкой, а не падением."""
-    out = {}
-    for cls in (GitVerse, SourceCraft):
-        try:
-            out[cls.source] = cls(cfg, path=path)
-        except StudyError as e:
-            out[cls.source] = e
-    return out
+HOSTS = {cls.key: cls for cls in (GitVerse, SourceCraft)}

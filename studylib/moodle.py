@@ -1,4 +1,4 @@
-"""Клиент ТУИС (Moodle). Подробности ручек — в ../tuis-api.md."""
+"""Клиент ТУИС (Moodle). Подробности ручек — в ../docs/tuis-api.md."""
 from . import net
 from .config import StudyError
 
@@ -14,7 +14,7 @@ class Moodle:
 
     def call(self, fn, **params):
         """Вызов ручки. Ошибка Moodle приходит с HTTP 200 в теле, поэтому проверяем тело."""
-        form = {"wstoken": self.cfg.token("TUIS_TOKEN_FILE"),
+        form = {"wstoken": self.cfg.token("TUIS_TOKEN"),
                 "moodlewsrestformat": "json", "wsfunction": fn}
         for key, value in params.items():
             if isinstance(value, (list, tuple)):
@@ -78,17 +78,17 @@ class Moodle:
                          status="all").get("attempts", [])
 
     def calendar(self, frm, to):
-        """limitnum у этой ручки максимум 50, поэтому окно листается по частям."""
-        events, start = [], frm
-        while start < to:
-            batch = self.call("core_calendar_get_action_events_by_timesort",
-                              timesortfrom=start, timesortto=to,
-                              limitnum=50).get("events", [])
+        """limitnum у этой ручки максимум 50; дальше — курсором aftereventid (lastid ответа):
+        сдвиг timesortfrom терял бы события с одинаковым сроком на границе страницы."""
+        events, after = [], None
+        while True:
+            out = self.call("core_calendar_get_action_events_by_timesort",
+                            timesortfrom=frm, timesortto=to, aftereventid=after, limitnum=50)
+            batch = out.get("events", [])
             events += batch
             if len(batch) < 50:
-                break
-            start = batch[-1]["timesort"] + 1
-        return events
+                return events
+            after = out["lastid"]
 
     def grades(self, courseid):
         return self.call("gradereport_user_get_grade_items", courseid=courseid,
@@ -102,7 +102,7 @@ class Moodle:
     def download(self, fileurl):
         """Файлы курса качаются не через REST: GET по fileurl с токеном в query."""
         sep = "&" if "?" in fileurl else "?"
-        return net.raw(fileurl + sep + "token=" + self.cfg.token("TUIS_TOKEN_FILE"),
+        return net.raw(fileurl + sep + "token=" + self.cfg.token("TUIS_TOKEN"),
                        "moodle", where="pluginfile")
 
     def functions(self):
@@ -116,7 +116,7 @@ class Moodle:
         for path in paths:
             data = path.read_bytes()
             out = net.request(f"{self.base}/webservice/upload.php", "moodle",
-                              fields={"token": self.cfg.token("TUIS_TOKEN_FILE"),
+                              fields={"token": self.cfg.token("TUIS_TOKEN"),
                                       "filearea": "draft", "itemid": str(last)},
                               files=[("file_1", path.name, data, "application/octet-stream")],
                               timeout=900, where="upload.php")

@@ -4,12 +4,12 @@
 не всё подряд: только документы и только до потолка по размеру, иначе в stash
 натечёт то, что там не нужно.
 """
-import json
 import pathlib
 import re
 
 from .config import ROOT, StudyError
 from .fmt import moment
+from .snapshot import load_state
 
 DOCS = {".pdf", ".doc", ".docx", ".odt", ".rtf", ".md", ".txt", ".tex", ".bib",
         ".ppt", ".pptx", ".odp", ".xls", ".xlsx", ".ods", ".csv",
@@ -24,8 +24,8 @@ def present(into, name):
 
 def stash(course):
     if not course.code:
-        raise StudyError("config", f"у курса {course.id} нет каталога в config.env "
-                                   "(стоит «-»), забирать файлы некуда")
+        raise StudyError("config", f"у курса {course.id} нет папки (строки CODE в config.env), "
+                                   "забирать файлы некуда")
     return ROOT / course.code / "stash"
 
 
@@ -38,8 +38,7 @@ def safe(name):
 def listing(cfg, moodle, course, since=None, everything=False):
     """Файлы курса; `new` — появился или изменился после `since`."""
     if since is None:
-        state_file = cfg.state_file()
-        since = json.loads(state_file.read_text()).get("last_run") if state_file.exists() else 0
+        since = load_state(cfg).get("last_run")
     since = since or 0
     into = stash(course)
     out = []

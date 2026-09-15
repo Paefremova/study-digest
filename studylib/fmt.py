@@ -49,26 +49,35 @@ def plain(s, limit=280):
 
 
 # Названия заданий в ТУИС длинные и однотипные; в таблице нужна суть.
-SHORT = [
-    (r"^Сдать отч[её]т по лабораторной работе №?\s*(\d+)\.?\s*(.*)$", "ЛР {0}", "{1}"),
-    (r"^Сдать отч[её]т по домашней работе №?\s*(\d+)\.?\s*(.*)$", "ДЗ {0}", "{1}"),
-    (r"^Загрузка (\d+) лабораторной работы$", "ЛР {0}", ""),
-    (r"^Выбрать тему доклада к лекции (\d+)$", "Тема доклада к лекции {0}", ""),
-    (r"^(?:Сдать доклад\.\s*Лекция|Доклад к лекции)\s*(\d+)$", "Доклад к лекции {0}", ""),
+# Вид работы → подпись; шаблоны: группа 1 — номер, группа 2 (если есть) — тема.
+WORKS = {"lab": "ЛР", "hw": "ДЗ", "topic": "Тема доклада к лекции", "talk": "Доклад к лекции"}
+PATTERNS = [
+    ("lab", r"^Сдать отч[её]т по лабораторной работе №?\s*(\d+)\.?\s*(.*)$"),
+    ("lab", r"^Загрузка (\d+) лабораторной работы$"),
+    ("hw", r"^Сдать отч[её]т по домашней работе №?\s*(\d+)\.?\s*(.*)$"),
+    ("topic", r"^Выбрать тему доклада к лекции (\d+)$"),
+    ("talk", r"^(?:Сдать доклад\.\s*Лекция|Доклад к лекции)\s*(\d+)$"),
 ]
+
+
+def parse_name(name):
+    """Разбор названия задания: {"work", "num", "topic"}; незнакомое имя — None."""
+    name = (name or "").strip()
+    for work, pat in PATTERNS:
+        m = re.match(pat, name, re.I)
+        if m:
+            g = m.groups()
+            return {"work": work, "num": g[0], "topic": (g[1] if len(g) > 1 else "").strip(' ."«»')}
+    return None
 
 
 def short_name(name, tail=True):
     """«Сдать отчет по лабораторной работе № 2. Простые сети» → «ЛР 2 — Простые сети»;
     `tail=False` — только «ЛР 2». Незнакомое имя — как есть, до 60 символов."""
-    name = (name or "").strip()
-    for pat, head, topic in SHORT:
-        m = re.match(pat, name, re.I)
-        if m:
-            g = [x or "" for x in m.groups()]
-            rest = topic.format(*g).strip(' ."«»') if tail else ""
-            return head.format(*g) + (" — " + rest if rest else "")
-    return plain(name, 60)
+    p = parse_name(name)
+    if not p:
+        return plain(name, 60)
+    return f"{WORKS[p['work']]} {p['num']}" + (f" — {p['topic']}" if tail and p["topic"] else "")
 
 
 def md_table(rows, headers):
