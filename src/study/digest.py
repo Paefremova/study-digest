@@ -432,7 +432,9 @@ def render(d):
     now = d["now"]["ts"]
     out = [f"# Учёба · {weekday(now)} {d['now']['text']}"]
     if t.get("first_run"):
-        out.append("\nПервый запуск: обновления в курсах начнут отслеживаться со следующего раза.")
+        out.append("\nПервый запуск: обновления в курсах начнут отслеживаться со следующего раза. "
+                   "Материалы курсов пока не скачаны: `study files <код> --pull` — "
+                   "в пустую stash/ забирает всё.")
 
     news = news_rows(t)
     rows = deadline_rows(t)

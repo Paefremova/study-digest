@@ -134,7 +134,9 @@ def cmd_grades(cfg, args):
 
 def cmd_files(cfg, args):
     m = Moodle(cfg)
-    d = files.listing(cfg, m, course_of(cfg, args.course), everything=args.all)
+    course = course_of(cfg, args.course)
+    # в пустую stash/ забираем всё: сравнивать «новое с прошлого запуска» не с чем
+    d = files.listing(cfg, m, course, everything=args.all or files.empty(course))
     if args.pull:
         d = files.pull(m, d, force=args.force)
     return d, files.render(d, pulled=args.pull)

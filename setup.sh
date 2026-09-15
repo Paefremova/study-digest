@@ -211,7 +211,7 @@ cat <<NEXT
   study courses --setup    перенастроить: какие курсы игнорировать и папки
   study agent <код>        файл инструкций для ИИ-оператора (claude, codex, gemini, copilot)
   study digest             первый запуск сохраняет снимок состояния
-  study files <код предмета> --pull    забрать материалы курса в stash/
+  study files <код предмета> --pull    забрать материалы курса в stash/ (в пустую — всё)
 
 Ежедневная сводка: Claude Code Desktop → Code → Routines → New routine → Local,
 рабочая папка $ROOT, в Instructions — текст из $DIGEST/docs/daily-digest-prompt.md.

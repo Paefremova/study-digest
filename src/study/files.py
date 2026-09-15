@@ -30,6 +30,12 @@ def stash(course):
     return ROOT / course.code / "stash"
 
 
+def empty(course):
+    """В stash/ курса ещё ничего нет (или его самого нет)."""
+    into = stash(course)
+    return not into.is_dir() or not any(into.iterdir())
+
+
 def safe(name):
     """Имя файла из ТУИС — в имя на диске: без разделителей пути и без пустого имени."""
     name = re.sub(r"[/\\\x00]", "_", name or "").strip() or "file"
