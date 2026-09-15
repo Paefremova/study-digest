@@ -15,7 +15,8 @@ WORK_DIRS = {"lab": "labs", "hw": "homework"}
 
 
 def git(path, *args, check=False):
-    r = subprocess.run(["git", "-C", str(path)] + list(args), capture_output=True, text=True)
+    """stdout команды git в каталоге path; при ошибке — "" (или StudyError, если check)."""
+    r = subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True, check=False)
     if r.returncode and check:
         raise StudyError("git", (r.stderr or r.stdout).strip() or "ошибка", where=" ".join(args))
     return r.stdout.strip() if not r.returncode else ""

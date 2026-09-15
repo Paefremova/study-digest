@@ -12,7 +12,6 @@ jwt   — новая схема rupass (VK ID / Gazprom ID): годовой refr
 import base64
 import getpass
 import json
-import os
 import pathlib
 import time
 import uuid
@@ -24,10 +23,12 @@ BASE = "https://rutube.ru/api"
 REFRESH_URL = "https://rutube.ru/multipass/api/v3/accounts/token/"
 UPLOAD_URL = "https://u.rutube.ru/upload/"
 # u.rutube.ru за антиботом — ходим с браузерными UA/Origin/Referer, как студия.
-WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+WEB_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+          "Chrome/128.0 Safari/537.36")
 # Возрастное ограничение: человеческий возраст → age_id (справочник зашит в студию, эндпоинта нет).
 AGE = {0: 1, 6: 2, 12: 3, 14: 6, 16: 4, 18: 5}
 DEFAULT_CATEGORY = 13   # «Разное»; список — `study rt categories`
+ACCESS_MARGIN = 120     # секунд до истечения access, когда его пора перевыпустить
 
 
 def _obj(out):
@@ -66,11 +67,11 @@ class Rutube:
     def _save(path, value):
         """Атомарно: пишем во временный файл и подменяем — обрыв не оставит пустой credential."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        os.chmod(path.parent, 0o700)
+        path.parent.chmod(0o700)
         tmp = path.with_name(path.name + ".tmp")
         tmp.write_text(value + "\n")
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, path)
+        tmp.chmod(0o600)
+        tmp.replace(path)
 
     @staticmethod
     def _jwt_payload(token):
@@ -133,7 +134,7 @@ class Rutube:
         af = self._access_path()
         if af.exists():
             cached = af.read_text().strip()
-            if cached and self._jwt_payload(cached).get("exp", 0) - time.time() > 120:
+            if cached and self._jwt_payload(cached).get("exp", 0) - time.time() > ACCESS_MARGIN:
                 self._access = cached
                 return cached
         rf = self._refresh_path()
@@ -184,7 +185,8 @@ class Rutube:
     def categories(self):
         """Список категорий (публично, токен не нужен, ответ — голый массив)."""
         rows = net.request(BASE + "/video/category/", self.source, where="video/category") or []
-        return [{"id": c.get("id"), "short": c.get("short_name"), "name": c.get("name")} for c in rows]
+        return [{"id": c.get("id"), "short": c.get("short_name"), "name": c.get("name")}
+                for c in rows]
 
     @staticmethod
     def video_url(vid):
@@ -252,9 +254,11 @@ class Rutube:
         vid = out.get("video_id") or out.get("id")
         if not vid:
             raise StudyError(self.source, f"video/ без id: {out}", code="upload")
-        return self._describe(vid, title, hidden, description=description, category=category, age=age)
+        return self._describe(vid, title, hidden, description=description, category=category,
+                              age=age)
 
-    def upload_file(self, path, title=None, description=None, category=None, hidden=False, age=None):
+    def upload_file(self, path, title=None, description=None, category=None, hidden=False,
+                    age=None):
         """Прямая загрузка локального файла: сессия → метаданные → байты (tus)."""
         path = pathlib.Path(path)
         title = title or path.stem
@@ -263,7 +267,8 @@ class Rutube:
         sid, vid = sess.get("sid"), sess.get("video")
         if not sid or not vid:
             raise StudyError(self.source, f"upload_session без sid/video: {sess}", code="upload")
-        card = self._describe(vid, title, hidden, description=description, category=category, age=age)
+        card = self._describe(vid, title, hidden, description=description, category=category,
+                              age=age)
         self._tus(sid, vid, path.read_bytes())
         return card
 
@@ -272,8 +277,9 @@ class Rutube:
         def b64(s):
             return base64.b64encode(str(s).encode()).decode()
         meta = f"sessionId {b64(sid)},videoId {b64(vid)},userId {b64(self._channel_id())}"
-        head = {"User-Agent": WEB_UA, "Tus-Resumable": "1.0.0", "Origin": "https://studio.rutube.ru",
-                "Referer": "https://studio.rutube.ru/", "Content-Type": "application/offset+octet-stream",
+        head = {"User-Agent": WEB_UA, "Tus-Resumable": "1.0.0",
+                "Origin": "https://studio.rutube.ru", "Referer": "https://studio.rutube.ru/",
+                "Content-Type": "application/offset+octet-stream",
                 "Upload-Length": str(len(body)), "Upload-Metadata": meta}
         _, hd, _ = net.send(UPLOAD_URL + sid, self.source, method="POST", headers=head,
                             data=body, where="tus")

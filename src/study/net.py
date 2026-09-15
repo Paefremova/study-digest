@@ -40,8 +40,8 @@ def send(url, source, *, method=None, headers=None, data=None, timeout=600, wher
             return r.status, dict(r.headers), r.read()
     except urllib.error.HTTPError as e:
         detail = (e.read() or b"")[:200].decode("utf-8", "replace").strip()
-        raise StudyError(source, f"HTTP {e.code}" + (f": {detail}" if detail else " (пустой ответ)"),
-                         where=where) from None
+        msg = f"HTTP {e.code}: {detail}" if detail else f"HTTP {e.code} (пустой ответ)"
+        raise StudyError(source, msg, where=where) from None
     except urllib.error.URLError as e:
         raise StudyError(source, f"нет связи: {e.reason}", where=where) from None
 
@@ -66,7 +66,8 @@ def request(url, source, *, method=None, headers=None, form=None, json_body=None
     elif files is not None:
         data, head["Content-Type"] = multipart(fields, files)
 
-    body = send(url, source, method=method, headers=head, data=data, timeout=timeout, where=where)[2]
+    body = send(url, source, method=method, headers=head, data=data,
+                timeout=timeout, where=where)[2]
     if not body:
         return None
     try:

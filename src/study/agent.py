@@ -20,16 +20,19 @@ END = "<!-- study:end -->"
 
 
 def block():
+    """Текст docs/AGENTS.md между маркерами — то, что вписывается в файл оператора."""
     return f"{BEGIN}\n{SOURCE.read_text().strip()}\n{END}\n"
 
 
 def status(operator):
+    """Есть ли файл оператора, стоит ли в нём блок и совпадает ли он с docs/AGENTS.md."""
     name, rel = OPERATORS[operator]
     path = ROOT / rel
     text = path.read_text() if path.exists() else ""
     installed = BEGIN in text and END in text
     return {"operator": operator, "name": name, "path": str(path), "file": rel,
-            "exists": path.exists(), "installed": installed, "current": installed and block() in text}
+            "exists": path.exists(), "installed": installed,
+            "current": installed and block() in text}
 
 
 def install(operator):

@@ -41,7 +41,7 @@ class StudyError(Exception):
     """Единственный тип ошибки во всём инструменте."""
 
     def __init__(self, source, message, code=None, where=None):
-        self.source = source          # config | moodle | gitverse | sourcecraft | rutube | git | local
+        self.source = source    # config | moodle | gitverse | sourcecraft | rutube | git | local
         self.message = str(message)
         self.code = code
         self.where = where
@@ -92,8 +92,8 @@ class Config:
     def _read(self):
         if not self.path.exists():
             return
-        for line in self.path.read_text().splitlines():
-            line = line.strip()
+        for raw in self.path.read_text().splitlines():
+            line = raw.strip()
             if not line or line.startswith("#"):
                 continue
             parts = line.split(None, 2)
@@ -145,7 +145,7 @@ class Config:
         keep.append("COURSE_IGNORE=" + " ".join(str(i) for i in sorted(ignore_ids)))
         keep += [f"CODE {cid} {code}" for cid, code in sorted(codes.items())]
         self.path.write_text("\n".join(keep) + "\n")
-        os.chmod(self.path, 0o600)
+        self.path.chmod(0o600)
         self._ignore, self._codes = set(ignore_ids), dict(codes)
 
     # --- сводка

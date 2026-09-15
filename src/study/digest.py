@@ -57,7 +57,7 @@ class Collector:
         self.horizon = self.now + days * DAY
         self.since = state.get("last_run")            # None — первый запуск
         self.known = state.get("assignments", {})     # id задания → срок с прошлого запуска
-        self.graded = state.get("grades")             # {курс: {работа: балл}}; None — снимка ещё нет
+        self.graded = state.get("grades")             # {курс: {работа: балл}}; None — нет снимка
         self.errors = []
         self.courses = {c.id: c for c in cfg.track(moodle.courses())}
         self.assigns = {}       # id задания → строка сводки (для снимка)
@@ -191,7 +191,8 @@ class Collector:
         for cid in self.courses:
             changed = []
             with self.soft(f"обновления курса {cid}"):
-                changed = [u for u in self.moodle.updates_since(cid, self.since) if u.get("updates")]
+                changed = [u for u in self.moodle.updates_since(cid, self.since)
+                           if u.get("updates")]
             if not changed:
                 continue
             names = {m["id"]: (m["name"], m["modname"], sec["name"], m.get("contents") or [])
@@ -295,7 +296,8 @@ class Collector:
         """Что запомнить до следующего запуска."""
         return {
             "last_run": self.now,
-            "assignments": {i: (a["due"]["ts"] if a["due"] else 0) for i, a in self.assigns.items()},
+            "assignments": {i: (a["due"]["ts"] if a["due"] else 0)
+                            for i, a in self.assigns.items()},
             "courses": {str(c.id): c.title for c in self.courses.values()},
             "grades": {str(g["course"]["id"]): {i["name"]: i["raw"] for i in g["items"]}
                        for g in data["grades"]},
@@ -316,8 +318,9 @@ def collect(cfg, moodle, days=None, save=True, since=None):
 # --- рендер
 
 def attempts(q):
-    used = q["attempts_used"] if q["attempts_used"] is not None else "?"
-    return "%s из %s" % (used, q["attempts_max"] or "∞")
+    """«попыток 1 из 3»; неизвестное число — «?», без предела — «∞»."""
+    used = "?" if q["attempts_used"] is None else q["attempts_used"]
+    return f"{used} из {q['attempts_max'] or '∞'}"
 
 
 def status_of(a):
@@ -326,9 +329,9 @@ def status_of(a):
     pick = a.get("choice")
     if pick:
         return ("выбрана: " + pick["chosen"] if pick["chosen"]
-                else "не выбрана, %d вариантов" % pick["options"])
+                else f"не выбрана, {pick['options']} вариантов")
     if a["kind"] == "quiz":
-        lim = ", %d мин" % a["timelimit_min"] if a["timelimit_min"] else ""
+        lim = f", {a['timelimit_min']} мин" if a["timelimit_min"] else ""
         head = "начат, не отправлен; " if a["open_attempt"] else ""
         return head + "попыток " + attempts(a) + lim
     if a["submission"] is None:
@@ -343,7 +346,7 @@ def label(a):
 
 
 def bold(cells):
-    return ["**%s**" % c if c not in ("", "—") else c for c in cells]
+    return [f"**{c}**" if c not in ("", "—") else c for c in cells]
 
 
 def when(m):
@@ -357,25 +360,19 @@ def repo_trouble(c):
         return None
     bad = []
     if repo["dirty"]:
-        bad.append("незакоммичено %d" % len(repo["dirty"]))
+        bad.append(f"незакоммичено {len(repo['dirty'])}")
     for u in c["unreleased_tags"]:
-        bad.append("нет релиза на %s (%s)" % (u["hosting"], ", ".join(u["tags"])))
+        bad.append(f"нет релиза на {u['hosting']} ({', '.join(u['tags'])})")
     for name, r in c["releases"].items():
         latest = r.get("latest")
         if latest and not latest.get("assets"):
-            bad.append("релиз %s на %s без файлов" % (latest["tag"], name))
-    return "%s: %s" % (c["code"], ", ".join(bad)) if bad else None
+            bad.append(f"релиз {latest['tag']} на {name} без файлов")
+    return f"{c['code']}: {', '.join(bad)}" if bad else None
 
 
-def render(d):
-    """Готовая сводка в markdown: то, что рутина печатает как есть."""
-    t = d.get("tuis") or {}
-    now = d["now"]["ts"]
-    out = ["# Учёба · %s %s" % (weekday(now), d["now"]["text"])]
-    if t.get("first_run"):
-        out.append("\nПервый запуск: обновления в курсах начнут отслеживаться со следующего раза.")
-
-    news = []
+def news_rows(t):
+    """«Новое в курсах»: файлы и настройки, новые задания, сдвинутые сроки."""
+    rows = []
     for u in t.get("updates", []):
         if u.get("pulled"):
             files_ = ", ".join(u["pulled"])
@@ -385,67 +382,85 @@ def render(d):
             files_ = ", ".join(u["files"]) + " — не скачаны"
         else:
             files_ = ", ".join(u["files"]) + " — у курса нет папки (CODE в config.env)"
-        news.append([label(u), u["section"] or "—", "%s: %s" % (u["item"], u["what"]), files_])
+        rows.append([label(u), u["section"] or "—", f"{u['item']}: {u['what']}", files_])
     for a in t.get("new_assignments", []):
-        news.append([label(a), "—", "новое задание: %s, до %s" % (a["short"], when(a["due"])), "—"])
+        rows.append([label(a), "—", f"новое задание: {a['short']}, до {when(a['due'])}", "—"])
     for a in t.get("moved", []):
-        news.append([label(a), "—", "срок сдвинут: %s, было %s → стало %s" % (
-            a["short"], when(a["was"]), when(a["due"])), "—"])
+        rows.append([label(a), "—", (f"срок сдвинут: {a['short']}, было {when(a['was'])} "
+                                     f"→ стало {when(a['due'])}"), "—"])
+    return rows
 
-    rows = []
-    for a in t.get("overdue", []):
-        rows.append(bold([a["due"]["text"], "просрочено", a["short"], label(a), status_of(a)]))
+
+def deadline_rows(t):
+    """«Сроки»: просроченное жирным, затем окно; сданное не показывается."""
+    rows = [bold([a["due"]["text"], "просрочено", a["short"], label(a), status_of(a)])
+            for a in t.get("overdue", [])]
     for a in t.get("deadlines", []):
         if a["submission"] == "submitted":
             continue
         cells = [a["due"]["text"], a["due"]["left"], a["short"], label(a), status_of(a)]
         urgent = a["due"]["left_sec"] < URGENT or a.get("open_attempt")
         rows.append(bold(cells) if urgent else cells)
+    return rows
+
+
+def grade_rows(t):
+    rows = []
+    for g in t.get("grades", []):
+        fresh = [f"{i['short']} {i['raw']:.2f}/{i['max']:g}" for i in g["items"] if i["new"]]
+        rows.append([label(g), f"{g['total']['raw']:.2f} / {g['total']['max']:g}",
+                     " · ".join(fresh) or "—"])
+    return rows
+
+
+def quiz_rows(t):
+    return [[q["short"], label(q), q["due"]["full"], attempts(q),
+             f"{q['timelimit_min']} мин" if q["timelimit_min"] else "—"]
+            for q in t.get("quizzes_ahead", [])
+            if q["due"]["left_sec"] < MONTH and q["submission"] != "submitted"]
+
+
+def outside_rows(t):
+    return [[o["nearest"]["at"]["text"], o["nearest"]["name"],
+             f"{o['course']['title']} (id {o['course']['id']}, ещё {o['count']})"]
+            for o in t.get("outside", [])]
+
+
+def render(d):
+    """Готовая сводка в markdown: то, что рутина печатает как есть."""
+    t = d.get("tuis") or {}
+    now = d["now"]["ts"]
+    out = [f"# Учёба · {weekday(now)} {d['now']['text']}"]
+    if t.get("first_run"):
+        out.append("\nПервый запуск: обновления в курсах начнут отслеживаться со следующего раза.")
+
+    news = news_rows(t)
+    rows = deadline_rows(t)
     if rows:
-        out.append("\n## Сроки\n")
-        out.append(md_table(rows, ["Когда", "Осталось", "Работа", "Курс", "Состояние"]))
+        out += ["\n## Сроки\n",
+                md_table(rows, ["Когда", "Осталось", "Работа", "Курс", "Состояние"])]
     elif d.get("tuis") is None:
         out.append("\nТУИС не опрашивался (`--local`): только состояние репозиториев.")
     else:
-        out.append("\nСроков в ближайшие %d дн нет.%s" % (
-            d["days"], "" if news or t.get("first_run") else " Обновлений нет."))
+        tail = "" if news or t.get("first_run") else " Обновлений нет."
+        out.append(f"\nСроков в ближайшие {d['days']} дн нет.{tail}")
 
     trouble = [s for s in map(repo_trouble, d["courses"]) if s]
     if trouble:
         out.append("\n" + "; ".join(trouble) + ".")
 
-    if t.get("grades"):
-        marks = []
-        for g in t["grades"]:
-            fresh = ["%s %.2f/%g" % (i["short"], i["raw"], i["max"]) for i in g["items"] if i["new"]]
-            marks.append([label(g), "%.2f / %g" % (g["total"]["raw"], g["total"]["max"]),
-                          " · ".join(fresh) or "—"])
-        out.append("\n## Баллы\n")
-        out.append(md_table(marks, ["Курс", "Итого", "Новое"]))
-
-    if t.get("notifications"):
-        out.append("\n## Уведомления\n")
-        out.append(md_table([[n["at"]["text"], n["subject"]] for n in t["notifications"]],
-                            ["Когда", "Тема"]))
-
-    if news:
-        out.append("\n## Новое в курсах\n")
-        out.append(md_table(news, ["Курс", "Раздел", "Что", "Файлы"]))
-
-    quizzes = [q for q in t.get("quizzes_ahead", [])
-               if q["due"]["left_sec"] < MONTH and q["submission"] != "submitted"]
-    if quizzes:
-        out.append("\n## Тесты\n")
-        out.append(md_table(
-            [[q["short"], label(q), q["due"]["full"], attempts(q),
-              "%d мин" % q["timelimit_min"] if q["timelimit_min"] else "—"]
-             for q in quizzes], ["Тест", "Курс", "Когда", "Попытки", "Время"]))
-
+    sections = [
+        ("Баллы", grade_rows(t), ["Курс", "Итого", "Новое"]),
+        ("Уведомления", [[n["at"]["text"], n["subject"]] for n in t.get("notifications", [])],
+         ["Когда", "Тема"]),
+        ("Новое в курсах", news, ["Курс", "Раздел", "Что", "Файлы"]),
+        ("Тесты", quiz_rows(t), ["Тест", "Курс", "Когда", "Попытки", "Время"]),
+        ("Дедлайны вне списка курсов", outside_rows(t), ["Когда", "Работа", "Курс"]),
+    ]
+    for title, rows, headers in sections:
+        if rows:
+            out += [f"\n## {title}\n", md_table(rows, headers)]
     if t.get("outside"):
-        out.append("\n## Дедлайны вне списка курсов\n")
-        out.append(md_table([[o["nearest"]["at"]["text"], o["nearest"]["name"],
-                              "%s (id %d, ещё %d)" % (o["course"]["title"], o["course"]["id"], o["count"])]
-                             for o in t["outside"]], ["Когда", "Работа", "Курс"]))
         out.append("\nКурс в COURSE_IGNORE или скрыт в ТУИС: убрать из игнора "
                    "(`study courses --setup`) или убедиться, что он неактуален.")
 
@@ -453,10 +468,9 @@ def render(d):
     if todo:
         a = todo[0]
         code = a["course"]["code"]
-        out.append("\n## Предлагаю начать\n")
-        out.append("**%s** · %s · до %s · методички: %s" % (
-            a["short"], code or a["course"]["title"], a["due"]["text"],
-            code + "/stash/" if code else "каталога курса нет"))
+        out += ["\n## Предлагаю начать\n",
+                (f"**{a['short']}** · {code or a['course']['title']} · до {a['due']['text']} · "
+                 f"методички: {code + '/stash/' if code else 'каталога курса нет'}")]
     return "\n".join(out)
 
 
@@ -494,7 +508,8 @@ def course_state(cfg, course, by_lab, errors):
     item["repo"] = local.repo_state(repo)
     item["repo"]["remotes"] = {}
     for cls in hosting.HOSTS.values():
-        item["repo"]["remotes"][cls.source] = local.repo_from_remote(repo, cls.remote, cls.host) or None
+        slug = local.repo_from_remote(repo, cls.remote, cls.host)
+        item["repo"]["remotes"][cls.source] = slug or None
         item["releases"][cls.source] = {"ok": False, "latest": None}
         with soft(errors, f"{cls.source}, курс {course.code}"):
             rels = cls(cfg, path=repo).releases()

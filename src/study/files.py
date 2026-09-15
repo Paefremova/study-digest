@@ -23,6 +23,7 @@ def present(into, name):
 
 
 def stash(course):
+    """Каталог материалов курса; у курса без папки его нет — это ошибка конфигурации."""
     if not course.code:
         raise StudyError("config", f"у курса {course.id} нет папки (строки CODE в config.env), "
                                    "забирать файлы некуда")
@@ -96,6 +97,7 @@ def pull(moodle, data, force=False):
 
 
 def render(d, pulled=False):
+    """Список файлов с отметкой: скачан / уже есть / пропущен и почему / можно забрать."""
     out = ["Курс: {} · stash: {}".format(d["course"]["title"], d["stash"]),
            "Новым считается всё, что изменилось после {}".format(
                d["since"]["full"] if d["since"] else "начала времён")]

@@ -14,6 +14,7 @@ ok() { printf '  + %s\n' "$1"; }
 
 # Тильда в пути, введённом руками или заданном настройкой.
 untilde() {
+  # shellcheck disable=SC2088  # это образец для case, а не путь
   case $1 in "~/"*) printf '%s' "$HOME/${1#\~/}" ;; *) printf '%s' "$1" ;; esac
 }
 

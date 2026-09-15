@@ -1,0 +1,23 @@
+# Пакет не собирается и через pip не ставится: study находит config.env и учебную директорию
+# по своему расположению в .digest/. Здесь только настройки проверки кода.
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "N", "B", "UP", "SIM", "C4", "RUF", "PL", "A", "ARG", "RET", "PIE", "ISC", "PTH", "ERA", "S"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # кириллица в строках и комментариях — это норма
+    "ARG001",                      # у всех команд одна сигнатура cmd(cfg, args)
+    "PLR0913", "PLR0917",          # именованные параметры у HTTP-обёрток и upload
+    "PLR2004",                     # len(parts) == 3 и подобное читается без констант
+    "S310", "S603", "S607",        # адреса и аргументы git заданы в коде, не пользователем
+    "S105",                        # token_key = "GITVERSE_TOKEN" — имя настройки, не секрет
+    "PLW1514", "UP015",            # кодировка файлов — системная UTF-8 (Linux/WSL)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/study/courses.py" = ["T20"]   # интерактивная настройка печатает и читает ввод
+"src/study/cli.py" = ["T20"]

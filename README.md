@@ -311,9 +311,10 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 ├── docs/                 документация
 ├── setup.sh              установка и настройка
 ├── config.env.example    шаблон настроек
+├── pyproject.toml        настройки проверки кода (ruff); пакет через pip не ставится
 └── config.env · .secrets/ · .state.json · state/   личное, вне git
 ```
 
 Все внешние вызовы идут через `src/study/net.py` (urllib), особенности каждого API спрятаны
-в его клиенте; `cli.py` только разбирает аргументы и печатает. Зависимостей нет,
-проверка — `pyflakes src/study/*.py`.
+в его клиенте; `cli.py` только разбирает аргументы и печатает. Зависимостей нет;
+проверка кода — `ruff check` (правила в `pyproject.toml`) и `shellcheck setup.sh`.

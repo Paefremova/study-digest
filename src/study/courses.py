@@ -23,6 +23,7 @@ def rows(cfg, moodle, include_hidden=False):
 
 
 def render(rows_):
+    """Таблица курсов и готовая строка COURSE_IGNORE из кандидатов «старый?»."""
     stale = " ".join(str(r["id"]) for r in rows_ if r["stale"] and not r["ignored"])
     return "\n".join([
         table([[str(r["id"]), seen(r["lastaccess"]),
@@ -64,7 +65,8 @@ def setup(cfg, rows_):
         if ans in ("", "g", "готово"):
             break
         if ans == "s":
-            ignore_ids = ignore_ids - stale_ids if stale_ids <= ignore_ids else ignore_ids | stale_ids
+            all_stale = stale_ids <= ignore_ids
+            ignore_ids = ignore_ids - stale_ids if all_stale else ignore_ids | stale_ids
             continue
         for tok in ans.replace(",", " ").split():
             if tok.isdigit() and int(tok) in num:

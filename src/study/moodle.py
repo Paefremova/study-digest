@@ -2,6 +2,8 @@
 from . import net
 from .config import StudyError
 
+PAGE = 50   # предел limitnum у календаря
+
 
 class Moodle:
     def __init__(self, cfg):
@@ -83,10 +85,10 @@ class Moodle:
         events, after = [], None
         while True:
             out = self.call("core_calendar_get_action_events_by_timesort",
-                            timesortfrom=frm, timesortto=to, aftereventid=after, limitnum=50)
+                            timesortfrom=frm, timesortto=to, aftereventid=after, limitnum=PAGE)
             batch = out.get("events", [])
             events += batch
-            if len(batch) < 50:
+            if len(batch) < PAGE:
                 return events
             after = out["lastid"]
 

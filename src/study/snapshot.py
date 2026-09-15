@@ -11,9 +11,11 @@ import time
 from .config import StudyError
 
 KEEP_DAYS = 60
+DAY = 86400
 
 
 def history_dir(cfg):
+    """Каталог снимков по дням — рядом с текущим снимком."""
     return cfg.state_file().with_name("state")
 
 
@@ -33,13 +35,13 @@ def load_state(cfg, since=None):
     if since == "all":
         return {"last_run": 1, "grades": {}}
     if re.fullmatch(r"\d+", since):
-        since = int(time.time()) - int(since) * 86400
+        since = int(time.time()) - int(since) * DAY
     else:
         try:
             since = int(datetime.datetime.strptime(since, "%Y-%m-%d").timestamp())
         except ValueError:
             raise StudyError("config", "--since: ожидается ГГГГ-ММ-ДД, число дней, never или all, "
-                                       f"а не «{since}»")
+                                       f"а не «{since}»") from None
     day = time.strftime("%Y-%m-%d", time.localtime(since))
     older = sorted(p for p in history_dir(cfg).glob("????-??-??.json") if p.stem <= day)
     if older:
@@ -49,6 +51,7 @@ def load_state(cfg, since=None):
 
 
 def save_state(cfg, state):
+    """Записать снимок: текущий файл, копия за день по last_run, старше KEEP_DAYS — удалить."""
     current = cfg.state_file()
     current.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(state, ensure_ascii=False, indent=1)
@@ -56,7 +59,7 @@ def save_state(cfg, state):
     hist = history_dir(cfg)
     hist.mkdir(exist_ok=True)
     (hist / time.strftime("%Y-%m-%d.json", time.localtime(state["last_run"]))).write_text(text)
-    cutoff = time.strftime("%Y-%m-%d", time.localtime(state["last_run"] - KEEP_DAYS * 86400))
+    cutoff = time.strftime("%Y-%m-%d", time.localtime(state["last_run"] - KEEP_DAYS * DAY))
     for p in hist.glob("????-??-??.json"):
         if p.stem < cutoff:
             p.unlink()

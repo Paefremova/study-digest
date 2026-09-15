@@ -65,7 +65,7 @@ def cmd_functions(cfg, args):
     if args.filter:
         names = [n for n in names if args.filter in n]
         return names, "\n".join(names)
-    return names, "всего функций: %d" % len(names)
+    return names, f"всего функций: {len(names)}"
 
 
 def cmd_call(cfg, args):
@@ -88,8 +88,8 @@ def cmd_assigns(cfg, args):
             lines.append("  id={} cmid={} до {}  {}".format(
                 a["id"], a["cmid"], due["text"] if due else "—", a["name"]))
     if warnings:
-        lines.append("\nСкрыто ограничением доступа: %d (сроки видны в `study digest`)"
-                     % len(warnings))
+        lines.append(f"\nСкрыто ограничением доступа: {len(warnings)} "
+                     "(сроки видны в `study digest`)")
     return {"assignments": rows, "warnings": warnings}, "\n".join(lines).lstrip()
 
 
@@ -114,7 +114,7 @@ def cmd_grades(cfg, args):
         try:
             grades = m.grades(c.id)
         except StudyError as e:
-            lines.append("\n{}: {}".format(c.title or c.id, e.message))
+            lines.append(f"\n{c.title or c.id}: {e.message}")
             continue
         for t in grades:
             items = [{"name": i.get("itemname"), "raw": i.get("graderaw"),
@@ -123,11 +123,11 @@ def cmd_grades(cfg, args):
             title = c.title or t.get("courseshortname") or str(c.id)
             rows.append({"course": {"id": c.id, "title": title}, "items": items})
             lines.append("\n" + title)
-            body = [["  " + (i["name"] or "")[:50], "%s из %s" % (i["raw"], i["max"])]
+            body = [["  " + (i["name"] or "")[:50], f"{i['raw']} из {i['max']}"]
                     for i in items if i["type"] != "course"]
             total = next((i for i in items if i["type"] == "course"), None)
             if total:
-                body.append(["  ИТОГО", "%s из %s" % (total["raw"], total["max"])])
+                body.append(["  ИТОГО", f"{total['raw']} из {total['max']}"])
             lines.append(table(body) if body else "  оценок пока нет")
     return rows, "\n".join(lines).lstrip()
 
@@ -161,7 +161,8 @@ def cmd_submit(cfg, args):
     m = Moodle(cfg)
     text = read_text(args.text)
     course_list, _ = m.assignments()
-    found = next((a for c in course_list for a in c["assignments"] if a["id"] == args.assign_id), None)
+    found = next((a for c in course_list for a in c["assignments"]
+                  if a["id"] == args.assign_id), None)
     plan = {"assign_id": args.assign_id, "name": found["name"] if found else None,
             "due": moment(found.get("duedate")) if found else None,
             "text_file": args.text, "text_chars": len(text or ""),
@@ -170,12 +171,11 @@ def cmd_submit(cfg, args):
         lines = ["Что будет отправлено:",
                  "  задание: {} (id {})".format(plan["name"] or "?", args.assign_id),
                  "  срок: {}".format(plan["due"]["full"] if plan["due"] else "—"),
-                 "  текст: " + ("{} ({} символов), формат Markdown".format(args.text, len(text))
+                 "  текст: " + (f"{args.text} ({len(text)} символов), формат Markdown"
                                 if text is not None else "нет"),
                  "  вложения: {}".format(args.files or "нет"),
                  "",
-                 "Отправка необратима: у заданий курса submissiondrafts=0, "
-                 "черновика не будет.",
+                 "Отправка необратима: у заданий курса submissiondrafts=0, черновика не будет.",
                  "Повтори с --confirm."]
         return plan, "\n".join(lines), 1
     plan["result"] = m.save_submission(args.assign_id, text, args.files)
@@ -352,22 +352,23 @@ def cmd_agent(cfg, args):
 # `--json` принимается и до, и после имени команды. SUPPRESS нужен, чтобы значение
 # из подкоманды не затирало уже разобранное значение основного разбора.
 JSON = argparse.ArgumentParser(add_help=False)
-JSON.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="машиночитаемый вывод")
+JSON.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                  help="машиночитаемый вывод")
 MODE = argparse.ArgumentParser(add_help=False)
 MODE.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto",
                   help="какой вход Rutube использовать (по умолчанию auto)")
 SINCE = {"help": "считать прошлым запуском: ГГГГ-ММ-ДД, N дней назад, never, all"}
 
 
-def add(sub, name, help, fn, *parents):
-    s = sub.add_parser(name, help=help, description=help, parents=[JSON, *parents])
+def add(sub, name, doc, fn, *parents):
+    s = sub.add_parser(name, help=doc, description=doc, parents=[JSON, *parents])
     s.set_defaults(fn=fn)
     return s
 
 
 def tuis_parsers(sub):
-    s = add(sub, "state", "готовая ежедневная сводка: сроки, баллы, новое в курсах, состояние работ",
-            cmd_state)
+    s = add(sub, "state",
+            "готовая ежедневная сводка: сроки, баллы, новое в курсах, состояние работ", cmd_state)
     s.add_argument("--days", type=int, help="окно дедлайнов, дней")
     s.add_argument("--local", action="store_true", help="без обращения к ТУИС")
     s.add_argument("--no-save", action="store_true", help="не обновлять снимок состояния")
@@ -497,7 +498,8 @@ def rt_parsers(sub):
     s.add_argument("--desc", help="файл с описанием")
     s.add_argument("--category", type=int,
                    help=f"id категории (см. rt categories; по умолчанию {DEFAULT_CATEGORY})")
-    s.add_argument("--age", type=int, choices=[0, 6, 12, 14, 16, 18], help="возраст (по умолчанию 0+)")
+    s.add_argument("--age", type=int, choices=[0, 6, 12, 14, 16, 18],
+                   help="возраст (по умолчанию 0+)")
     s.add_argument("--hidden", action="store_true", help="загрузить скрытым")
     s.add_argument("--playlist", help="id плейлиста — сразу добавить туда")
     s.add_argument("--slot", choices=["lab", "report", "presentation", "defense"],

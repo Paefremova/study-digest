@@ -4,16 +4,19 @@ import html as htmllib
 import re
 import time
 
+HOUR = 3600
+DAY = 24 * HOUR
+
 
 def left(sec):
     """Сколько осталось, словами."""
     if sec < 0:
         return "срок прошёл"
-    if sec < 3600:
+    if sec < HOUR:
         return "меньше часа"
-    if sec < 86400:
-        return "%d ч" % (sec // 3600)
-    return "%d дн" % (sec // 86400)
+    if sec < DAY:
+        return f"{sec // HOUR} ч"
+    return f"{sec // DAY} дн"
 
 
 WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
