@@ -71,20 +71,26 @@ if [ -x "$HERE/study" ]; then
   DIGEST=$HERE
   ok "уже на месте: $DIGEST"
 else
-  # Скрипт скачали отдельно — сначала забираем сам инструмент.
+  # Скрипт скачали отдельно — спрашиваем, куда ставить, и проверяем путь.
   default=$HOME/study/digest
-  target=""
-  if [ -t 0 ]; then
+  target=$default
+  while [ -t 0 ]; do
     read -r -p "  куда установить [$default]: " target
-  fi
-  target=$(untilde "${target:-$default}")
+    target=$(untilde "${target:-$default}")
+    case $target in /*) ;; *) target=$PWD/$target ;; esac    # относительный — от текущего каталога
+    case $target in *=*) warn "в пути нельзя '=' (ломает libvirt/virtiofsd)"; continue ;; esac
+    [ "${#target}" -le 100 ] || { warn "слишком длинный путь (лимит unix-сокетов Packer ~108 байт)"; continue; }
+    if [ -x "$target/study" ]; then break; fi                # уже установлено — берём как есть
+    if [ -e "$target" ] && [ -n "$(ls -A "$target" 2>/dev/null)" ]; then
+      warn "$target существует и не пуст — выбери другой"; continue
+    fi
+    mkdir -p "$(dirname "$target")" 2>/dev/null || { warn "нет доступа к $(dirname "$target")"; continue; }
+    break
+  done
   if [ -x "$target/study" ]; then
     ok "уже установлено: $target"
-  elif [ -d "$target" ] && [ -n "$(ls -A "$target" 2>/dev/null)" ]; then
-    warn "$target существует и не пуст"
-    exit 1
   else
-    git clone --quiet "$REPO" "$target"
+    git clone --quiet "$REPO" "$target" || { warn "git clone не удался: $REPO"; exit 1; }
     ok "склонировано в $target"
   fi
   DIGEST=$target
