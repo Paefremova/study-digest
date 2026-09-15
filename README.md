@@ -258,12 +258,12 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 |--------|-------------|
 | другой набор курсов в новом семестре | `study courses --setup` (`COURSE_IGNORE`, строки `CODE`) |
 | адрес Moodle, токены, окно дедлайнов | `TUIS_URL`, `TUIS_TOKEN` и др., `DIGEST_DAYS` |
-| вид сводки | `studylib/digest.py`, функция `render` |
+| вид сводки | `src/study/digest.py`, функция `render` |
 | шаги задачи агента | `docs/daily-digest-prompt.md` |
 | правила для агента | `docs/AGENTS.md`, затем `study agent <код>` |
-| новый источник данных | `studylib/moodle.py` + `studylib/digest.py` + запись в `docs/tuis-api.md` |
-| новый хостинг кода | класс в `studylib/hosting.py` + запись в `docs/hosting-api.md` |
-| новый ИИ-оператор | строка в `OPERATORS`, `studylib/agent.py` |
+| новый источник данных | `src/study/moodle.py` + `src/study/digest.py` + запись в `docs/tuis-api.md` |
+| новый хостинг кода | класс в `src/study/hosting.py` + запись в `docs/hosting-api.md` |
+| новый ИИ-оператор | строка в `OPERATORS`, `src/study/agent.py` |
 
 **Курсы.** Отслеживаются все курсы пользователя в ТУИС, кроме `COURSE_IGNORE` (id через
 пробел). Папку курса задаёт `CODE <id> <имя папки>`; курс без папки попадает в сводку по
@@ -305,15 +305,15 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 
 ```
 .digest/
-├── study                 точка входа
-├── studylib/             cli · digest (сводка) · moodle · hosting · rutube · files · answer
-│                         · courses · agent · config · net · fmt · local · snapshot
+├── study                 запускающий файл (лаунчер)
+├── src/study/            пакет: cli · digest (сводка) · moodle · hosting · rutube · files
+│                         · answer · courses · agent · config · net · fmt · local · snapshot
 ├── docs/                 документация
 ├── setup.sh              установка и настройка
 ├── config.env.example    шаблон настроек
 └── config.env · .secrets/ · .state.json · state/   личное, вне git
 ```
 
-Все внешние вызовы идут через `studylib/net.py` (urllib), особенности каждого API спрятаны
+Все внешние вызовы идут через `src/study/net.py` (urllib), особенности каждого API спрятаны
 в его клиенте; `cli.py` только разбирает аргументы и печатает. Зависимостей нет,
-проверка — `pyflakes studylib/*.py`.
+проверка — `pyflakes src/study/*.py`.

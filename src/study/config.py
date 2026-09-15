@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-HERE = pathlib.Path(__file__).resolve().parent.parent  # каталог .digest/
+HERE = pathlib.Path(__file__).resolve().parents[2]     # каталог .digest/ (src/study/config.py)
 ROOT = HERE.parent                                     # ~/work/study
 
 DEFAULTS = {

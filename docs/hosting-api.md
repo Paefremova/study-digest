@@ -1,6 +1,6 @@
 # GitVerse и SourceCraft: справочник API
 
-> Для кого: тот, кто правит `studylib/hosting.py` или зовёт `study gv api` / `study sc api`.
+> Для кого: тот, кто правит `src/study/hosting.py` или зовёт `study gv api` / `study sc api`.
 > Когда читать: при добавлении хостинга и при непонятном 4xx.
 
 Два хостинга кода, на которых лежит репозиторий курса: GitVerse — основной (remote `origin`),

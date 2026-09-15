@@ -1,6 +1,6 @@
 # ТУИС: справочник ручек Moodle
 
-> Для кого: тот, кто правит `studylib/moodle.py` и `digest.py` или зовёт `study call`.
+> Для кого: тот, кто правит `src/study/moodle.py` и `digest.py` или зовёт `study call`.
 > Когда читать: при добавлении источника данных в сводку и при странном ответе ТУИС.
 
 Moodle 4.5 на `https://esystem.rudn.ru` (адрес — `TUIS_URL` в `config.env`). Все вызовы — POST на
