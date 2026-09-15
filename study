@@ -13,7 +13,8 @@ def windows_console():
     """Windows: вывод в файл или пайп идёт в системной кодировке, а не UTF-8, и консоль
     без VT-режима печатает ANSI-последовательности как есть."""
     for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(stream, "reconfigure"):   # в тестах это StringIO
+            stream.reconfigure(encoding="utf-8", errors="replace")
     k = ctypes.windll.kernel32
     handle, mode = k.GetStdHandle(-11), ctypes.c_uint()   # STD_OUTPUT_HANDLE
     if k.GetConsoleMode(handle, ctypes.byref(mode)):

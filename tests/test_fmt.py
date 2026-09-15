@@ -38,7 +38,7 @@ class TimeTest(unittest.TestCase):
         m = fmt.moment(1_000_000, now=1_000_000 - fmt.DAY)
         self.assertEqual((m["ts"], m["left"], m["left_sec"], m["overdue"]),
                          (1_000_000, "1 дн", fmt.DAY, False))
-        self.assertTrue(fmt.moment(10, now=20)["overdue"])
+        self.assertTrue(fmt.moment(1_000_010, now=1_000_020)["overdue"])   # <0 на Windows нельзя
 
 
 class TablesTest(unittest.TestCase):

@@ -74,7 +74,8 @@ class Screen:
 def windows_console():
     """Windows: UTF-8 в пайпы и VT-режим консоли, чтобы цвета и очистка экрана работали."""
     for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(stream, "reconfigure"):   # в тестах это StringIO
+            stream.reconfigure(encoding="utf-8", errors="replace")
     k = ctypes.windll.kernel32
     handle, mode = k.GetStdHandle(-11), ctypes.c_uint()
     if k.GetConsoleMode(handle, ctypes.byref(mode)):

@@ -159,7 +159,7 @@ class AnswerTest(unittest.TestCase):
         self.assertEqual(d["created"], str(self.tmp / "nettech/tuis/hw01.env"))
         with self.assertRaises(StudyError) as e:
             answer.build(self.cfg, "nettech", "2")
-        self.assertIn("labs/lab02", e.exception.message)
+        self.assertIn(str(self.repo / "labs" / "lab02"), e.exception.message)
         with self.assertRaises(StudyError) as e:
             answer.build(self.cfg, "nope", "1")
         self.assertIn("не найден репозиторий", e.exception.message)
