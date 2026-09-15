@@ -28,7 +28,7 @@ def course_of(cfg, value):
 
 
 def read_text(path):
-    return pathlib.Path(path).read_text() if path else None
+    return pathlib.Path(path).read_text(encoding="utf-8") if path else None
 
 
 def kv(pairs):

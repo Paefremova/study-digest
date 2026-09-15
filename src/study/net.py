@@ -3,6 +3,7 @@
 urllib по умолчанию представляется `Python-urllib/3.12`, поэтому User-Agent задаётся явно.
 """
 import json as jsonlib
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -43,7 +44,12 @@ def send(url, source, *, method=None, headers=None, data=None, timeout=600, wher
         msg = f"HTTP {e.code}: {detail}" if detail else f"HTTP {e.code} (пустой ответ)"
         raise StudyError(source, msg, where=where) from None
     except urllib.error.URLError as e:
-        raise StudyError(source, f"нет связи: {e.reason}", where=where) from None
+        # macOS со сборкой python.org без «Install Certificates.command» не доверяет никому
+        bad_cert = isinstance(e.reason, ssl.SSLCertVerificationError)
+        raise StudyError(source, f"нет связи: {e.reason}", where=where,
+                         code="certificate" if bad_cert else None) from None
+    except OSError as e:   # обрыв или таймаут уже после соединения
+        raise StudyError(source, f"нет связи: {e}", where=where) from None
 
 
 def raw(url, source, *, headers=None, timeout=600, where=None):

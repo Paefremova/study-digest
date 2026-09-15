@@ -36,7 +36,7 @@ def render(rows_):
 
 
 def setup(cfg, rows_):
-    """Интерактивно (из setup.sh): чекбоксы игнора, затем имя папки на каждый курс."""
+    """Интерактивно (`study setup`): чекбоксы игнора, затем имя папки на каждый курс."""
     num = {i + 1: r for i, r in enumerate(sorted(rows_, key=lambda r: (r["stale"], r["title"])))}
     ignore_ids = {r["id"] for r in rows_ if r["ignored"]}
     stale_ids = {r["id"] for r in rows_ if r["stale"]}

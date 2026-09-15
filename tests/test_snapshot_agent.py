@@ -12,7 +12,8 @@ from tests.fakes import tmpdir
 class SnapshotTest(unittest.TestCase):
     def setUp(self):
         self.dir = tmpdir(self)
-        (self.dir / "config.env").write_text(f"DIGEST_STATE={self.dir / '.state.json'}\n")
+        (self.dir / "config.env").write_text(f"DIGEST_STATE={self.dir / '.state.json'}\n",
+                                             encoding="utf-8")
         self.cfg = Config(self.dir / "config.env")
 
     def test_load_variants(self):
@@ -37,7 +38,8 @@ class SnapshotTest(unittest.TestCase):
         snapshot.save_state(self.cfg, {"last_run": old + (snapshot.KEEP_DAYS + 1) * snapshot.DAY})
         days = sorted(p.stem for p in snapshot.history_dir(self.cfg).glob("*.json"))
         self.assertEqual(len(days), 1)
-        kept = json.loads((snapshot.history_dir(self.cfg) / f"{days[0]}.json").read_text())
+        kept = json.loads((snapshot.history_dir(self.cfg) / f"{days[0]}.json")
+                          .read_text(encoding="utf-8"))
         self.assertEqual(kept["last_run"], old + (snapshot.KEEP_DAYS + 1) * snapshot.DAY)
 
 
@@ -45,7 +47,7 @@ class AgentTest(unittest.TestCase):
     def setUp(self):
         self.root = pathlib.Path(tempfile.mkdtemp())
         self.src = self.root / "AGENTS.src.md"
-        self.src.write_text("# Инструкция\n\nтекст v1\n")
+        self.src.write_text("# Инструкция\n\nтекст v1\n", encoding="utf-8")
         self._saved = agent.ROOT, agent.SOURCE
         agent.ROOT, agent.SOURCE = self.root, self.src
 
@@ -56,24 +58,24 @@ class AgentTest(unittest.TestCase):
         r = agent.install("copilot")
         self.assertTrue(r["current"] and (self.root / ".github/copilot-instructions.md").exists())
 
-        (self.root / "CLAUDE.md").write_text("# Моё\n\n- правило 1\n")
+        (self.root / "CLAUDE.md").write_text("# Моё\n\n- правило 1\n", encoding="utf-8")
         agent.install("claude")
-        text = (self.root / "CLAUDE.md").read_text()
+        text = (self.root / "CLAUDE.md").read_text(encoding="utf-8")
         self.assertTrue(text.startswith("# Моё\n\n- правило 1\n\n" + agent.BEGIN))
         self.assertTrue(text.endswith(agent.END + "\n"))
 
-        (self.root / "CLAUDE.md").write_text(text + "\n# После\n")
-        self.src.write_text("# Инструкция\n\nтекст v2\n")
+        (self.root / "CLAUDE.md").write_text(text + "\n# После\n", encoding="utf-8")
+        self.src.write_text("# Инструкция\n\nтекст v2\n", encoding="utf-8")
         self.assertFalse(agent.status("claude")["current"])
         agent.install("claude")
-        text = (self.root / "CLAUDE.md").read_text()
+        text = (self.root / "CLAUDE.md").read_text(encoding="utf-8")
         self.assertIn("текст v2", text)
         self.assertNotIn("текст v1", text)
         self.assertEqual(text.count(agent.BEGIN), 1)
         self.assertTrue(text.startswith("# Моё\n\n- правило 1\n\n"))
         self.assertTrue(text.endswith("\n# После\n"))
         agent.install("claude")
-        self.assertEqual((self.root / "CLAUDE.md").read_text(), text)
+        self.assertEqual((self.root / "CLAUDE.md").read_text(encoding="utf-8"), text)
 
 
 class UpdateNoteTest(unittest.TestCase):

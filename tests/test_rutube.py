@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 import time
 import unittest
 
@@ -39,10 +40,10 @@ class AuthTest(RutubeCase):
         with self.assertRaises(StudyError) as e:
             self.rt()._auth_header()
         self.assertEqual(e.exception.code, "notoken")
-        self.token.write_text("T0\n")
+        self.token.write_text("T0\n", encoding="utf-8")
         self.assertEqual(self.rt()._auth_header(), {"Authorization": "Token T0"})
-        self.refresh.write_text("R1\n")
-        self.access.write_text(FRESH + "\n")
+        self.refresh.write_text("R1\n", encoding="utf-8")
+        self.access.write_text(FRESH + "\n", encoding="utf-8")
         self.assertEqual(self.rt()._auth_header(), {"Authorization": "Bearer " + FRESH})
         self.assertEqual(self.rt("token")._auth_header(), {"Authorization": "Token T0"})
         self.assertEqual(self.rt("jwt")._auth_header(), {"Authorization": "Bearer " + FRESH})
@@ -52,25 +53,27 @@ class AuthTest(RutubeCase):
         self.assertEqual(self.net.sent, [])
 
     def test_mint_cache_and_rotation(self):
-        self.refresh.write_text("R1\n")
-        self.access.write_text(STALE + "\n")   # истекает раньше запаса — перевыпуск
+        self.refresh.write_text("R1\n", encoding="utf-8")
+        # истекает раньше запаса — перевыпуск
+        self.access.write_text(STALE + "\n", encoding="utf-8")
         self.net.reply("POST", REFRESH_URL, {"access_token": FRESH, "refresh_token": "R2"})
         r = self.rt("jwt")
         self.assertEqual(r._mint(), FRESH)
         req = self.net.sent[0]
         self.assertEqual((req["headers"]["Cookie"], req["data"]), ("refreshToken=R1", None))
-        self.assertEqual(self.refresh.read_text(), "R2\n")
-        self.assertEqual(self.access.read_text(), FRESH + "\n")
-        self.assertEqual(oct(self.access.stat().st_mode)[-3:], "600")
+        self.assertEqual(self.refresh.read_text(encoding="utf-8"), "R2\n")
+        self.assertEqual(self.access.read_text(encoding="utf-8"), FRESH + "\n")
+        if os.name == "posix":
+            self.assertEqual(oct(self.access.stat().st_mode)[-3:], "600")
         self.assertEqual(r._mint(), FRESH)                  # в памяти
         self.assertEqual(self.rt("jwt")._mint(), FRESH)     # из файла, без сети
         self.assertEqual(len(self.net.sent), 1)
 
     def test_mint_keeps_refresh_without_rotation(self):
-        self.refresh.write_text("R1\n")
+        self.refresh.write_text("R1\n", encoding="utf-8")
         self.net.reply("POST", REFRESH_URL, {"access_token": FRESH})
         self.rt("jwt")._mint()
-        self.assertEqual(self.refresh.read_text(), "R1\n")
+        self.assertEqual(self.refresh.read_text(encoding="utf-8"), "R1\n")
         self.access.unlink()
         self.net.reply("POST", REFRESH_URL, {"detail": "invalid"})
         with self.assertRaises(StudyError) as e:
@@ -82,17 +85,18 @@ class AuthTest(RutubeCase):
         self.assertEqual(e.exception.code, "notoken")
 
     def test_save_refresh_checks_before_writing(self):
-        self.refresh.write_text("OLD\n")
+        self.refresh.write_text("OLD\n", encoding="utf-8")
         self.net.reply("POST", REFRESH_URL, {"error": "x"})
         with self.assertRaises(StudyError):
             self.rt().save_refresh("refreshToken=BAD; ym_uid=1")
-        self.assertEqual(self.refresh.read_text(), "OLD\n")   # битый ввод не затирает рабочий
+        # битый ввод не затирает рабочий
+        self.assertEqual(self.refresh.read_text(encoding="utf-8"), "OLD\n")
         self.net.reply("POST", REFRESH_URL, {"access_token": FRESH, "refresh_token": "R2"})
         out = self.rt().save_refresh("refreshToken=R1; ym_uid=1")
         self.assertEqual(out, {"refresh_file": str(self.refresh), "ok": True})
         self.assertEqual(self.net.sent[1]["headers"]["Cookie"], "refreshToken=R1")
-        self.assertEqual((self.refresh.read_text(), self.access.read_text()),
-                         ("R2\n", FRESH + "\n"))
+        self.assertEqual((self.refresh.read_text(encoding="utf-8"),
+                          self.access.read_text(encoding="utf-8")), ("R2\n", FRESH + "\n"))
         self.assertEqual(_extract_refresh(" R9 "), "R9")
         with self.assertRaises(StudyError):
             self.rt().save_refresh("refreshToken=")
@@ -103,19 +107,19 @@ class AuthTest(RutubeCase):
                          {"token_file": str(self.token), "ok": True})
         self.assertEqual(self.net.sent[0]["json_body"], {"username": "a@b.c", "password": "pw"})
         self.assertNotIn("Authorization", self.net.sent[0]["headers"])
-        self.assertEqual(self.token.read_text(), "T1\n")
+        self.assertEqual(self.token.read_text(encoding="utf-8"), "T1\n")
         self.net.reply("POST", "/accounts/token_auth/", {"non_field_errors": ["bad"]})
         with self.assertRaises(StudyError):
             self.rt().login("a@b.c", "pw")
 
     def test_channel_id(self):
-        self.refresh.write_text("R1\n")
-        self.access.write_text(FRESH + "\n")
+        self.refresh.write_text("R1\n", encoding="utf-8")
+        self.access.write_text(FRESH + "\n", encoding="utf-8")
         self.assertEqual(self.rt("jwt")._channel_id(), 42)
         self.access.write_text(jwt(exp=int(time.time()) + 3600,
-                                   data={"user_info": {"id": 7}}) + "\n")
+                                   data={"user_info": {"id": 7}}) + "\n", encoding="utf-8")
         self.assertEqual(self.rt("jwt")._channel_id(), 7)
-        self.access.write_text(jwt(exp=int(time.time()) + 3600) + "\n")
+        self.access.write_text(jwt(exp=int(time.time()) + 3600) + "\n", encoding="utf-8")
         with self.assertRaises(StudyError) as e:
             self.rt("jwt")._channel_id()
         self.assertEqual(e.exception.code, "auth")
@@ -125,8 +129,8 @@ class AuthTest(RutubeCase):
 class ApiTest(RutubeCase):
     def setUp(self):
         super().setUp()
-        self.refresh.write_text("R1\n")
-        self.access.write_text(FRESH + "\n")
+        self.refresh.write_text("R1\n", encoding="utf-8")
+        self.access.write_text(FRESH + "\n", encoding="utf-8")
         self.r = self.rt()
 
     def test_me_and_categories(self):

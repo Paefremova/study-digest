@@ -23,7 +23,7 @@ class HostingCase(unittest.TestCase):
         self.gits = []
         patch(self, local, "git", self.git)
         self.notes = self.tmp / "notes.md"
-        self.notes.write_text("см. https://gitverse.ru/me/course/commit/abc\n")
+        self.notes.write_text("см. https://gitverse.ru/me/course/commit/abc\n", encoding="utf-8")
 
     def git(self, path, *args, check=False, timeout=None):
         self.gits.append(args)
@@ -77,7 +77,7 @@ class GitVerseTest(HostingCase):
 
     def test_release_sha_from_tag(self):
         self.net.reply("POST", "/repos/me/course/releases", {"id": 9, "tag_name": "v1.1.0"})
-        out = self.gv.release("v1.1.0", "ЛР 1", self.notes.read_text())
+        out = self.gv.release("v1.1.0", "ЛР 1", self.notes.read_text(encoding="utf-8"))
         self.assertEqual(out, {"id": 9, "tag": "v1.1.0",
                                "url": "https://gitverse.ru/me/course/releases/tag/v1.1.0"})
         self.assertIn(("rev-parse", "v1.1.0^{commit}"), self.gits)
@@ -163,7 +163,7 @@ class SourceCraftTest(HostingCase):
     def test_release_localized_no_branch(self):
         self.net.reply("POST", "/repos/org/course/releases",
                        {"tag": "v1.1.0", "status": "PUBLISHED"})
-        out = self.sc.release("v1.1.0", "ЛР 1", self.notes.read_text(), sha=SHA)
+        out = self.sc.release("v1.1.0", "ЛР 1", self.notes.read_text(encoding="utf-8"), sha=SHA)
         self.assertEqual(out, {"tag": "v1.1.0", "status": "PUBLISHED",
                                "url": "https://sourcecraft.dev/org/course/releases/v1.1.0"})
         self.assertEqual(self.net.sent[0]["json_body"],
@@ -185,7 +185,7 @@ class SourceCraftTest(HostingCase):
 
     def test_asset_any_extension(self):
         f = self.tmp / "slides.html"
-        f.write_text("<html>")
+        f.write_text("<html>", encoding="utf-8")
         self.net.reply("POST", "/repos/org/course/releases/tag/v1.1.0/attachments", {})
         self.assertEqual(self.sc.asset("v1.1.0", f), {"name": "slides.html", "ok": True})
         self.assertEqual(self.net.sent[0]["files"],

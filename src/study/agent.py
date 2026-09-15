@@ -21,14 +21,15 @@ END = "<!-- study:end -->"
 
 def block():
     """Текст docs/AGENTS.md между маркерами — то, что вписывается в файл оператора."""
-    return f"{BEGIN}\n{SOURCE.read_text().strip()}\n{END}\n"
+    text = SOURCE.read_text(encoding="utf-8").strip()
+    return f"{BEGIN}\n{text}\n{END}\n"
 
 
 def status(operator):
     """Есть ли файл оператора, стоит ли в нём блок и совпадает ли он с docs/AGENTS.md."""
     name, rel = OPERATORS[operator]
     path = ROOT / rel
-    text = path.read_text() if path.exists() else ""
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
     installed = BEGIN in text and END in text
     return {"operator": operator, "name": name, "path": str(path), "file": rel,
             "exists": path.exists(), "installed": installed,
@@ -39,7 +40,7 @@ def install(operator):
     """Создать файл оператора или обновить в нём блок; остальной текст файла сохраняется."""
     path = ROOT / OPERATORS[operator][1]
     new = block()
-    text = path.read_text() if path.exists() else ""
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
     i, j = text.find(BEGIN), text.find(END)
     if 0 <= i < j:
         rest = text[j + len(END):]
@@ -49,5 +50,5 @@ def install(operator):
     else:
         text = new
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
+    path.write_text(text, encoding="utf-8")
     return status(operator)

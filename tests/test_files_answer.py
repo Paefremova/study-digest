@@ -87,6 +87,8 @@ class FilesTest(unittest.TestCase):
 class SafeNameTest(unittest.TestCase):
     def test_safe(self):
         self.assertEqual(files.safe("../a/b\\c.pdf"), ".._a_b_c.pdf")
+        self.assertEqual(files.safe('Лекция 1: "введение" <v2>?.pdf'),   # запрещено на Windows
+                         "Лекция 1_ _введение_ _v2__.pdf")
         self.assertEqual(files.safe(None), "file")
         self.assertEqual(len(files.safe("x" * 300)), 200)
 
@@ -103,15 +105,15 @@ class AnswerTest(unittest.TestCase):
         for d in ("labs/lab01/report/_output", "labs/lab01/presentation/_output", "homework/hw01"):
             (self.repo / d).mkdir(parents=True)
         (self.repo / "labs/lab01/report/_output/nettech-lab01-report.pdf").write_bytes(b"%PDF")
-        (self.repo / "labs/lab01/presentation/_output/slides.html").write_text("")
+        (self.repo / "labs/lab01/presentation/_output/slides.html").write_text("", encoding="utf-8")
         self.env = self.tmp / "nettech" / "tuis" / "lab01.env"
 
     def test_first_run_creates_env(self):
         d = answer.build(self.cfg, "nettech", "1")
         self.assertEqual(d, {"created": str(self.env), "text": None, "attachments": [],
                              "missing": local.VIDEO_KEYS})
-        self.assertTrue(self.env.read_text().startswith(answer.TEMPLATE))
-        self.assertEqual(self.env.read_text().count("=\n"), 10)
+        self.assertTrue(self.env.read_text(encoding="utf-8").startswith(answer.TEMPLATE))
+        self.assertEqual(self.env.read_text(encoding="utf-8").count("=\n"), 10)
         self.assertIn("заполни ссылки", answer.render(d))
         self.assertFalse((self.tmp / "nettech/tuis/lab01.md").exists())
 
@@ -119,7 +121,7 @@ class AnswerTest(unittest.TestCase):
         self.env.parent.mkdir(parents=True)
         self.env.write_text("RUTUBE_PLAYLIST=https://rutube.ru/plst/1/\n"
                             "RUTUBE_LAB=https://rutube.ru/video/a/\n"
-                            "VK_DEFENSE=https://vk.com/video-1_4\n")
+                            "VK_DEFENSE=https://vk.com/video-1_4\n", encoding="utf-8")
         d = answer.build(self.cfg, "nettech", "lab01")
         self.assertEqual(d["text"],
                          "- Скринкасты, Rutube: [плейлист](https://rutube.ru/plst/1/)\n"
@@ -136,14 +138,14 @@ class AnswerTest(unittest.TestCase):
         self.assertEqual(d["attachments"],
                          [str(self.repo / "labs/lab01/report/_output/nettech-lab01-report.pdf")])
         self.assertEqual(len(d["missing"]), 7)
-        self.assertEqual(self.env.with_suffix(".md").read_text(), d["text"])
+        self.assertEqual(self.env.with_suffix(".md").read_text(encoding="utf-8"), d["text"])
         text = answer.render(d)
         self.assertIn("Прикрепить к ответу:\n  " + d["attachments"][0], text)
         self.assertIn("Не заполнено в lab01.env: RUTUBE_REPORT, ", text)
 
     def test_tag_and_remote_only(self):
         self.env.parent.mkdir(parents=True)
-        self.env.write_text("")
+        self.env.write_text("", encoding="utf-8")
         git(self.repo, "remote", "remove", "src")   # SC_REPO из config.env не подставляется
         d = answer.build(self.cfg, "nettech", "1", tag="v1.0.0")
         self.assertEqual(d["text"], "- Репозиторий и релиз:\n"

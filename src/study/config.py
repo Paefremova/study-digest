@@ -32,8 +32,11 @@ HINTS = {
                     "служба Moodle mobile web service → «Очистка», значение показывается один раз.",
     "nopermissiontoviewgrades": "Запись на курс истекла, оценки недоступны.",
     "invalidrecord": "Функция не входит в службу этого токена: у служб РУДН свои ключи.",
-    "notoken": "Статические токены — строками в config.env (их спрашивает setup.sh), "
+    "notoken": "Статические токены — строками в config.env (их спрашивает `study setup`), "
                "Rutube — `study rt jwt` или `study rt login`. См. README.md, «Установка».",
+    "certificate": "Python не нашёл корневые сертификаты. macOS со сборкой python.org: "
+                   "запусти «Install Certificates.command» из папки Python в /Applications; "
+                   "иначе проверь прокси или антивирус, подменяющий TLS.",
 }
 
 
@@ -92,7 +95,7 @@ class Config:
     def _read(self):
         if not self.path.exists():
             return
-        for raw in self.path.read_text().splitlines():
+        for raw in self.path.read_text(encoding="utf-8").splitlines():
             line = raw.strip()
             if not line or line.startswith("#"):
                 continue
@@ -120,7 +123,7 @@ class Config:
                 f = self.path_of(name + "_FILE") if self.get(name + "_FILE") else None
                 if not f or not f.exists():
                     raise StudyError("config", f"нет {name} в {self.path.name}", code="notoken")
-                val = f.read_text().strip()
+                val = f.read_text(encoding="utf-8").strip()
             self._tokens[name] = val
         return self._tokens[name]
 
@@ -140,13 +143,18 @@ class Config:
 
     def write_courses(self, ignore_ids, codes):
         """Переписать в config.env строки COURSE_IGNORE и CODE (и убрать старые COURSE)."""
-        keep = [ln for ln in self.path.read_text().splitlines()
+        keep = [ln for ln in self.path.read_text(encoding="utf-8").splitlines()
                 if not re.match(r"\s*(COURSE_IGNORE\s*=|CODE\s|COURSE\s)", ln)]
         keep.append("COURSE_IGNORE=" + " ".join(str(i) for i in sorted(ignore_ids)))
         keep += [f"CODE {cid} {code}" for cid, code in sorted(codes.items())]
-        self.path.write_text("\n".join(keep) + "\n")
-        self.path.chmod(0o600)
+        self._write(keep)
         self._ignore, self._codes = set(ignore_ids), dict(codes)
+
+    def _write(self, lines):
+        """config.env целиком; права 600 — там, где они есть (на Windows chmod ничего не значит)."""
+        self.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        if os.name == "posix":
+            self.path.chmod(0o600)
 
     # --- сводка
 

@@ -27,7 +27,7 @@ def build(cfg, code, num, tag=None):
     if not v["exists"]:
         env = pathlib.Path(v["path"])
         env.parent.mkdir(parents=True, exist_ok=True)
-        env.write_text(TEMPLATE + "".join(f"{k}=\n" for k in local.VIDEO_KEYS))
+        env.write_text(TEMPLATE + "".join(f"{k}=\n" for k in local.VIDEO_KEYS), encoding="utf-8")
         return {"created": v["path"], "text": None, "attachments": [], "missing": v["missing"]}
 
     tag = tag or local.git(repo, "describe", "--tags", "--abbrev=0")
@@ -52,7 +52,7 @@ def build(cfg, code, num, tag=None):
     text = "\n".join(body) + "\n"
 
     out = local.tuis_dir(code) / f"{kind}{num}.md"
-    out.write_text(text)
+    out.write_text(text, encoding="utf-8")
     return {"created": None, "path": str(out), "text": text, "tag": tag,
             "repo": str(repo), "lab": str(lab),
             "attachments": [str(p) for p in sorted(lab.glob("*/_output/*.pdf"))],

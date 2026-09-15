@@ -30,7 +30,9 @@ ENV = re.compile(r"^(TUIS_|GITVERSE_|SOURCECRAFT_|DIGEST_|RUTUBE_|GV_REPO$|SC_RE
 def fixture(name):
     """tests/fixtures/<name>.json как объект; имя с расширением — как текст."""
     p = FIXTURES / name
-    return p.read_text() if p.suffix else json.loads(p.with_suffix(".json").read_text())
+    if p.suffix:
+        return p.read_text(encoding="utf-8")
+    return json.loads(p.with_suffix(".json").read_text(encoding="utf-8"))
 
 
 def patch(case, obj, attr, value):
@@ -70,7 +72,7 @@ def config(tmp, extra=""):
                  f"DIGEST_STATE={tmp / '.state.json'}\n"
                  f"RUTUBE_TOKEN_FILE={tmp / 'rt-token'}\n"
                  f"RUTUBE_REFRESH_FILE={tmp / 'rt-refresh'}\n"
-                 f"RUTUBE_ACCESS_FILE={tmp / 'rt-access'}\n" + extra)
+                 f"RUTUBE_ACCESS_FILE={tmp / 'rt-access'}\n" + extra, encoding="utf-8")
     return Config(p)
 
 
@@ -82,7 +84,7 @@ GIT = ["git", "-c", "user.name=study", "-c", "user.email=study@example.org",
 
 def git(path, *args):
     """git в каталоге path с тестовой личностью и без подписи; stdout."""
-    return subprocess.run([*GIT, "-C", str(path), *args], capture_output=True, text=True,
+    return subprocess.run([*GIT, "-C", str(path), *args], capture_output=True, encoding="utf-8",
                           check=True).stdout.strip()
 
 

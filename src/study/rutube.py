@@ -12,6 +12,7 @@ jwt   — новая схема rupass (VK ID / Gazprom ID): годовой refr
 import base64
 import getpass
 import json
+import os
 import pathlib
 import time
 import uuid
@@ -67,10 +68,11 @@ class Rutube:
     def _save(path, value):
         """Атомарно: пишем во временный файл и подменяем — обрыв не оставит пустой credential."""
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.parent.chmod(0o700)
         tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(value + "\n")
-        tmp.chmod(0o600)
+        tmp.write_text(value + "\n", encoding="utf-8")
+        if os.name == "posix":
+            path.parent.chmod(0o700)
+            tmp.chmod(0o600)
         tmp.replace(path)
 
     @staticmethod
@@ -133,14 +135,14 @@ class Rutube:
             return self._access
         af = self._access_path()
         if af.exists():
-            cached = af.read_text().strip()
+            cached = af.read_text(encoding="utf-8").strip()
             if cached and self._jwt_payload(cached).get("exp", 0) - time.time() > ACCESS_MARGIN:
                 self._access = cached
                 return cached
         rf = self._refresh_path()
         if not rf.exists():
             raise StudyError(self.source, f"нет файла {rf}", code="notoken")
-        refresh = rf.read_text().strip()
+        refresh = rf.read_text(encoding="utf-8").strip()
         access, new = self._refresh_call(refresh)
         if new and new != refresh:
             self._save(rf, new)

@@ -194,13 +194,13 @@ class CollectorTest(DigestCase):
         queue(self.net, since=False)
         d = digest.collect(self.cfg, Moodle(self.cfg))
         self.assertTrue(d["first_run"])
-        saved = json.loads(self.cfg.state_file().read_text())
+        saved = json.loads(self.cfg.state_file().read_text(encoding="utf-8"))
         self.assertEqual(saved["last_run"], NOW)
         self.assertTrue((self.tmp / "state" / "2026-09-16.json").exists())
         queue(self.net, since=True)
         d = digest.collect(self.cfg, Moodle(self.cfg), save=False, since="1")
         self.assertEqual(d["since"]["ts"], NOW - DAY)
-        self.assertEqual(json.loads(self.cfg.state_file().read_text()), saved)
+        self.assertEqual(json.loads(self.cfg.state_file().read_text(encoding="utf-8")), saved)
 
 
 class StateTest(DigestCase):
@@ -216,9 +216,9 @@ class StateTest(DigestCase):
                           "src": "ssh://ssh.sourcecraft.dev/me/nettech.git"}, tag="v1.1.0")
         (self.repo / "labs/lab01/report/_output").mkdir(parents=True)
         (self.repo / "labs/lab01/report/_output/r.pdf").write_bytes(b"%PDF")
-        (self.repo / "labs/lab01/report/r.qmd").write_text("")
+        (self.repo / "labs/lab01/report/r.qmd").write_text("", encoding="utf-8")
         (self.repo / "labs/lab03").mkdir()
-        (self.repo / "labs/lab03/todo.txt").write_text("")
+        (self.repo / "labs/lab03/todo.txt").write_text("", encoding="utf-8")
 
     def hosts(self):
         self.net.reply("GET", "api.gitverse.ru/repos/me/nettech/releases",
@@ -252,7 +252,7 @@ class StateTest(DigestCase):
                       "релиз v1.1.0 на sourcecraft без файлов.", text)
 
     def test_with_tuis_and_pull(self):
-        self.cfg.state_file().write_text(json.dumps(STATE))
+        self.cfg.state_file().write_text(json.dumps(STATE), encoding="utf-8")
         queue(self.net)
         self.hosts()
         self.net.reply("GET", "002-dns.pdf?forcedownload=1&token=test-token", b"%PDF-2")

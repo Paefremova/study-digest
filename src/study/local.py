@@ -24,8 +24,9 @@ def run(path, *args, timeout=None):
         env.setdefault("GIT_TERMINAL_PROMPT", "0")
         env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
     try:
-        return subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True,
-                              check=False, timeout=timeout, env=env)
+        return subprocess.run(["git", "-C", str(path), *args], capture_output=True,
+                              encoding="utf-8", errors="replace", check=False,
+                              timeout=timeout, env=env)
     except subprocess.TimeoutExpired:
         return None
 
@@ -93,7 +94,7 @@ def videos(code, num, kind="lab"):
         return {"path": str(f), "exists": False, "filled": 0, "total": len(VIDEO_KEYS),
                 "missing": list(VIDEO_KEYS), "values": {}}
     values = {}
-    for line in f.read_text().splitlines():
+    for line in f.read_text(encoding="utf-8").splitlines():
         if "=" in line and not line.strip().startswith("#"):
             key, _, value = line.partition("=")
             values[key.strip()] = value.strip()

@@ -24,7 +24,7 @@ class UpdateTest(unittest.TestCase):
         root = self.tmp / "study"
         root.mkdir()
         src = self.tmp / "AGENTS.md"
-        src.write_text("# Инструкция\n\nv1\n")
+        src.write_text("# Инструкция\n\nv1\n", encoding="utf-8")
         for mod, attr, value in ((update, "HERE", self.clone), (agent, "ROOT", root),
                                  (agent, "SOURCE", src)):
             patch(self, mod, attr, value)
@@ -47,7 +47,8 @@ class UpdateTest(unittest.TestCase):
     def test_behind_and_apply(self):
         agent.install("claude")
         self.upstream("feat: новое", "fix: правка")
-        self.src.write_text("# Инструкция\n\nv2\n")   # как если бы pull обновил docs/AGENTS.md
+        # как если бы pull обновил docs/AGENTS.md
+        self.src.write_text("# Инструкция\n\nv2\n", encoding="utf-8")
         d = update.check()
         self.assertEqual((d["behind"], d["ahead"], d["commits"]),
                          (2, 0, ["fix: правка", "feat: новое"]))   # новые первыми
@@ -58,7 +59,7 @@ class UpdateTest(unittest.TestCase):
         out = update.apply()
         self.assertEqual((out["updated"], out["now"], out["refreshed"]),
                          (True, d["remote"], ["CLAUDE.md"]))
-        self.assertIn("v2", (self.root / "CLAUDE.md").read_text())
+        self.assertIn("v2", (self.root / "CLAUDE.md").read_text(encoding="utf-8"))
         self.assertEqual(update.check()["behind"], 0)
 
     def test_check_without_fetch_and_ahead(self):
@@ -72,7 +73,7 @@ class UpdateTest(unittest.TestCase):
 
     def test_stale_agent_only(self):
         agent.install("codex")
-        self.src.write_text("# Инструкция\n\nv2\n")
+        self.src.write_text("# Инструкция\n\nv2\n", encoding="utf-8")
         out = update.apply()
         self.assertEqual((out["updated"], out["refreshed"]), (False, ["AGENTS.md"]))
         self.assertTrue(agent.status("codex")["current"])

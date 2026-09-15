@@ -11,7 +11,7 @@ class ConfigTest(unittest.TestCase):
         self.path = self.dir / "config.env"
 
     def write(self, text):
-        self.path.write_text(text)
+        self.path.write_text(text, encoding="utf-8")
         return Config(self.path)
 
     def test_read(self):
@@ -37,7 +37,7 @@ class ConfigTest(unittest.TestCase):
     def test_token_value_file_missing(self):
         cfg = self.write("GITVERSE_TOKEN=abc\n")
         self.assertEqual(cfg.token("GITVERSE_TOKEN"), "abc")
-        (self.dir / "t").write_text("fromfile\n")
+        (self.dir / "t").write_text("fromfile\n", encoding="utf-8")
         cfg = self.write(f"RUTUBE_TOKEN_FILE={self.dir / 't'}\n")
         self.assertEqual(cfg.token("RUTUBE_TOKEN"), "fromfile")
         with self.assertRaises(StudyError) as e:
@@ -54,9 +54,10 @@ class ConfigTest(unittest.TestCase):
     def test_write_courses(self):
         cfg = self.write("A=1\nCOURSE_IGNORE=1\nCODE 5 five\nCOURSE 7 x Старое\n# CODE 8 keep\n")
         cfg.write_courses({3}, {5: "five", 8: "eight"})
-        self.assertEqual(self.path.read_text(),
+        self.assertEqual(self.path.read_text(encoding="utf-8"),
                          "A=1\n# CODE 8 keep\nCOURSE_IGNORE=3\nCODE 5 five\nCODE 8 eight\n")
-        self.assertEqual(oct(self.path.stat().st_mode)[-3:], "600")
+        if os.name == "posix":
+            self.assertEqual(oct(self.path.stat().st_mode)[-3:], "600")
         self.assertEqual(Config(self.path).codes(), {5: "five", 8: "eight"})
 
 

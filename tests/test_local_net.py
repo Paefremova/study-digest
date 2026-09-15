@@ -1,9 +1,13 @@
+import ssl
 import unittest
+import urllib.error
+import urllib.request
 
 from study import local, net
 from study.cli import kv
-from study.config import Config
+from study.config import Config, StudyError
 from study.hosting import GitVerse, SourceCraft
+from tests.fakes import patch
 
 
 class LocalTest(unittest.TestCase):
@@ -23,6 +27,24 @@ class LocalTest(unittest.TestCase):
 
 
 class NetTest(unittest.TestCase):
+    def test_certificate_and_connection_errors(self):
+        def fail(reason):
+            def urlopen(*_, **__):
+                raise urllib.error.URLError(reason)
+            return urlopen
+
+        cert = ssl.SSLCertVerificationError(1, "CERTIFICATE_VERIFY_FAILED")
+        patch(self, urllib.request, "urlopen", fail(cert))
+        with self.assertRaises(StudyError) as e:
+            net.send("https://x.example/", "moodle")
+        self.assertEqual(e.exception.code, "certificate")
+        self.assertIn("Install Certificates.command", e.exception.hint())
+        patch(self, urllib.request, "urlopen", fail(OSError("refused")))
+        with self.assertRaises(StudyError) as e:
+            net.send("https://x.example/", "moodle")
+        self.assertEqual((e.exception.code, e.exception.hint()), (None, None))
+        self.assertIn("нет связи", e.exception.message)
+
     def test_multipart(self):
         body, ctype = net.multipart({"a": "1"},
                                     [("f", "x.bin", b"\x00\xff", "application/octet-stream")])
