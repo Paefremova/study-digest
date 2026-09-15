@@ -261,6 +261,51 @@ def cmd_rt_api(cfg, args):
     return out, json.dumps(out, ensure_ascii=False, indent=1)
 
 
+def cmd_rt_categories(cfg, args):
+    rows = rutube.Rutube(cfg).categories()
+    return rows, table([[str(c["id"]), c["short"] or "", c["name"] or ""] for c in rows],
+                       ["id", "код", "название"])
+
+
+def cmd_rt_video(cfg, args):
+    v = rutube.Rutube(cfg, mode=args.mode).video(args.video_id)
+    keys = [("id", "id"), ("title", "название"), ("is_hidden", "скрыто"),
+            ("video_url", "ссылка"), ("duration", "длительность")]
+    cat = (v.get("category") or {}).get("name")
+    lines = [f"{label}: {v.get(k)}" for k, label in keys] + [f"категория: {cat}"]
+    return v, "\n".join(lines)
+
+
+def cmd_rt_edit(cfg, args):
+    fields = {"title": args.title, "category": args.category,
+              "description": pathlib.Path(args.desc).read_text() if args.desc else None}
+    if args.hidden:
+        fields["is_hidden"] = True
+    if args.visible:
+        fields["is_hidden"] = False
+    v = rutube.Rutube(cfg, mode=args.mode).edit(args.video_id, **fields)
+    return v, "готово: " + (v.get("title") or args.video_id)
+
+
+def cmd_rt_pl_list(cfg, args):
+    rows = rutube.Rutube(cfg, mode=args.mode).playlists()
+    return rows, table([[str(p["id"]), p["title"] or "", "скрыто" if p["hidden"] else "",
+                         p["url"] or ""] for p in rows],
+                       ["id", "название", "", "ссылка"]) or "плейлистов нет"
+
+
+def cmd_rt_pl_create(cfg, args):
+    p = rutube.Rutube(cfg, mode=args.mode).playlist_create(args.title, args.hidden)
+    pid = p.get("id")
+    url = f"https://rutube.ru/plst/{pid}/" if pid else ""
+    return p, f"плейлист создан: {pid} {url}".rstrip() + (f"\nRUTUBE_PLAYLIST={url}" if url else "")
+
+
+def cmd_rt_pl_add(cfg, args):
+    out = rutube.Rutube(cfg, mode=args.mode).playlist_add(args.playlist_id, args.video_id)
+    return out, f"видео {args.video_id} → плейлист {args.playlist_id}"
+
+
 # --- сводки
 
 def cmd_digest(cfg, args):
@@ -404,6 +449,36 @@ def build_parser():
     ra.add_argument("path", help="например /video/person/")
     ra.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto",
                     help="какой вход использовать (по умолчанию auto)")
+    rts.add_parser("categories", help="список категорий Rutube (id для --category)",
+                   parents=[common]).set_defaults(fn=cmd_rt_categories)
+    vv = rts.add_parser("video", help="метаданные и состояние своего видео", parents=[common])
+    vv.set_defaults(fn=cmd_rt_video)
+    vv.add_argument("video_id")
+    vv.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto")
+    ed = rts.add_parser("edit", help="правка названия/описания/категории/видимости", parents=[common])
+    ed.set_defaults(fn=cmd_rt_edit)
+    ed.add_argument("video_id")
+    ed.add_argument("--title")
+    ed.add_argument("--desc", help="файл с описанием")
+    ed.add_argument("--category", type=int, help="id категории (см. rt categories)")
+    ed.add_argument("--hidden", action="store_true", help="сделать скрытым")
+    ed.add_argument("--visible", action="store_true", help="сделать публичным")
+    ed.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto")
+    pl = rts.add_parser("playlist", help="плейлисты: list/create/add")
+    pls = pl.add_subparsers(dest="plcmd", required=True, metavar="действие")
+    pll = pls.add_parser("list", help="свои плейлисты", parents=[common])
+    pll.set_defaults(fn=cmd_rt_pl_list)
+    pll.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto")
+    plc = pls.add_parser("create", help="создать плейлист", parents=[common])
+    plc.set_defaults(fn=cmd_rt_pl_create)
+    plc.add_argument("--title", required=True)
+    plc.add_argument("--hidden", action="store_true", help="скрытый плейлист")
+    plc.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto")
+    pla = pls.add_parser("add", help="добавить видео в плейлист", parents=[common])
+    pla.set_defaults(fn=cmd_rt_pl_add)
+    pla.add_argument("playlist_id")
+    pla.add_argument("video_id")
+    pla.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto")
     return p
 
 

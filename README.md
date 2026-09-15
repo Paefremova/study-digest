@@ -134,6 +134,12 @@ study submit <id> [--text <файл>] [--files <itemid>] --confirm  отправ
 
 study gv releases | release <тег> --title T --notes F | update <тег> --notes F | asset <id-релиза> <файл> | api <путь>
 study sc releases | release <тег> --title T --notes F | update <тег> --notes F | asset <тег> <файл> | api <путь>
+
+study rt jwt [--refresh T] | login [--email E] | me [--mode M] | api <путь>   вход и проверка Rutube
+study rt categories                          категории видео (id для --category; тегов у Rutube нет)
+study rt video <id-видео>                    метаданные и состояние своего видео
+study rt edit <id> [--title T | --desc <файл> | --category N | --hidden | --visible]   правка видео
+study rt playlist list | create --title T [--hidden] | add <id-плейлиста> <id-видео>
 ```
 
 `--json` перед командой или после неё печатает те же данные машиночитаемо — ровно то,
