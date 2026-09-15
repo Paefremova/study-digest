@@ -176,7 +176,23 @@ mkdir -p "$HOME/.local/bin"
 ln -sfn "$DIGEST/study" "$HOME/.local/bin/study"
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "добавь ~/.local/bin в PATH или перезайди в оболочку" ;; esac
 
-# --- 6. Курсы
+# --- 6. ИИ-оператор
+
+bold $'\nИИ-оператор'
+echo "  Инструкция для агента (.digest/docs/AGENTS.md) кладётся блоком в файл оператора"
+echo "  в корне учебной директории; всё вне блока — личные правила, они не трогаются."
+if [ ! -t 0 ]; then
+  warn "нет терминала, шаг пропущен — позже: study agent <код>"
+else
+  "$DIGEST/study" agent | sed 's/^/  /'
+  read -r -p "  какие поставить (коды через пробел, Enter - пропустить): " operators
+  if [ -n "$operators" ]; then
+    # shellcheck disable=SC2086
+    "$DIGEST/study" agent $operators | sed 's/^/  /' || warn "не удалось — проверь коды: study agent"
+  fi
+fi
+
+# --- 7. Курсы
 
 bold $'\nКурсы'
 if [ ! -t 0 ]; then
@@ -192,9 +208,10 @@ bold $'\nДальше'
 cat <<NEXT
   study courses            список курсов и текущий COURSE_IGNORE
   study courses --setup    перенастроить: какие курсы игнорировать и папки
+  study agent <код>        файл инструкций для ИИ-оператора (claude, codex, gemini, copilot)
   study digest             первый запуск сохраняет снимок состояния
   study files <код предмета> --pull    забрать материалы курса в stash/
 
 Ежедневная сводка: Claude Code Desktop → Code → Routines → New routine → Local,
-рабочая папка $ROOT, в Instructions — текст из $DIGEST/daily-digest-prompt.md.
+рабочая папка $ROOT, в Instructions — текст из $DIGEST/docs/daily-digest-prompt.md.
 NEXT

@@ -1,10 +1,13 @@
-# ТУИС: справочник ручек
+# ТУИС: справочник ручек Moodle
 
-Moodle 4.5 на `https://esystem.rudn.ru`. Все вызовы — POST на
+> Для кого: тот, кто правит `studylib/moodle.py` и `digest.py` или зовёт `study call`.
+> Когда читать: при добавлении источника данных в сводку и при странном ответе ТУИС.
+
+Moodle 4.5 на `https://esystem.rudn.ru` (адрес — `TUIS_URL` в `config.env`). Все вызовы — POST на
 `/webservice/rest/server.php` с параметрами `wstoken`, `wsfunction`, `moodlewsrestformat=json`.
 Загрузка файлов — отдельный эндпоинт `/webservice/upload.php`.
 
-Токен: строкой `TUIS_TOKEN` в `config.env` (запасной вариант — файл `~/.config/tuis/token`). Получается в профиле Moodle,
+Токен: строкой `TUIS_TOKEN` в `config.env`. Получается в профиле Moodle,
 раздел «Ключи безопасности», служба **Moodle mobile web service**; значение
 показывается один раз при создании или после «Очистка». Токен даёт полный
 доступ к учётной записи — в репозитории и заметки не класть.
@@ -25,9 +28,9 @@ Moodle 4.5 на `https://esystem.rudn.ru`. Все вызовы — POST на
 | `mod_quiz_get_quizzes_by_courses` | тесты курсов: `timeopen`, `timeclose`, `timelimit`, число попыток | `courseids[]` |
 | `mod_choice_get_choices_by_courses` | элементы «выбор темы доклада»: `id` и `coursemodule` для связи с cmid из состава курса | `courseids[]` |
 | `mod_choice_get_choice_options` | варианты выбора; у выбранного `checked: true` — так видно, выбрана ли тема | `choiceid` |
-| `mod_quiz_get_user_attempts` | мои попытки прохождения теста | `quizid`, `status=all` |
+| `mod_quiz_get_user_attempts` | мои попытки прохождения теста: `state` — `finished` (тест сдан, в сводке прячется как задание со статусом submitted), `inprogress`/`overdue` (начат, не отправлен). `sumgrades: null` у сданной попытки — балл ещё не выставлен или скрыт, в журнал оценок такой элемент не попадает вовсе | `quizid`, `status=all` |
 | `gradereport_user_get_grade_items` | баллы: строки ведомости, `graderaw`/`grademax`, итог курса | `courseid`, `userid` |
-| `core_calendar_get_action_events_by_timesort` | события календаря: сроки всех курсов, в том числе не из `config.env` | `timesortfrom`, `timesortto`, `limitnum` (максимум **50**) |
+| `core_calendar_get_action_events_by_timesort` | события календаря: сроки всех курсов, в том числе не из `config.env` | `timesortfrom`, `timesortto`, `limitnum` (максимум **50**), дальше — курсор `aftereventid` = `lastid` прошлого ответа. Сдвигать `timesortfrom` нельзя: дедлайны массово стоят в 23:59 одного дня, и события с одинаковым `timesort` на границе страницы теряются |
 | `core_message_get_messages` | уведомления ТУИС (о сроках, о проверке работ) | `useridto`, `type=notifications`, `read=0`, `limitnum` |
 | `/webservice/upload.php` | загрузка файла в черновую область, возвращает `itemid` | `token`, `filearea=draft`, `itemid`, `file_1=@файл` |
 | `mod_assign_save_submission` | сохранение ответа на задание | `assignmentid`, `plugindata[onlinetext_editor][text]`, `[format]=4`, `[itemid]=0`, `plugindata[files_filemanager]=<itemid>` |
@@ -52,14 +55,8 @@ Moodle 4.5 на `https://esystem.rudn.ru`. Все вызовы — POST на
 
 Полный список: `study functions` — общее число, `study functions assign` — фильтр по подстроке.
 
-## Идентификаторы курсов
-
-| id | Курс |
-|----|------|
-| 131 | Администрирование сетевых подсистем |
-| 130 | Сетевые технологии |
-| 5934 | Вычислительные методы |
-| 6087 | Реляционные базы данных |
+Идентификаторы своих курсов печатает `study courses`; папки курсов задают строки `CODE`
+в `config.env`.
 
 ## Грабли
 
@@ -87,7 +84,7 @@ Moodle 4.5 на `https://esystem.rudn.ru`. Все вызовы — POST на
   он обычным GET с токеном в query: `<fileurl>&token=<токен>` (проверено 10.09.2026, 200 OK).
   Полезные поля рядом: `filename`, `filesize`, `timemodified` — по последнему видно, что файл
   обновился. Элементы `mod_page` отдают `index.html` с `filesize: 0` — это не файл, а страница.
-- **Массивы параметров кодируются по-Moodle**: `courseids[0]=131&courseids[1]=130`,
+- **Массивы параметров кодируются по-Moodle**: `courseids[0]=<id>&courseids[1]=<id>`,
   а не повторением ключа и не JSON-массивом.
 - **Ошибка приходит с HTTP 200.** Тело вида `{"exception": …, "errorcode": …, "message": …}`
   — проверять надо тело ответа, а не код. Частые коды: `invalidtoken` (токен перевыпущен),

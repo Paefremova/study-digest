@@ -64,6 +64,27 @@ rutube (`refresh`/`access`) инструмент ведёт сам в `.digest/.
 .digest/study digest           # первый запуск сохраняет снимок состояния
 ```
 
+## ИИ-оператор
+
+Инструкция для агента — один текст, `docs/AGENTS.md`: что лежит в учебной директории,
+что умеет `study`, чего делать нельзя (ничего не отправлять без согласия, `--no-save`
+в проверках, служебное вне репозитория курса). У операторов различаются только имена
+файлов, которые они читают, поэтому `setup.sh` спрашивает, кем пользуешься, и кладёт
+этот текст блоком в нужный файл в корне учебной директории:
+
+| Код | Кто читает | Файл |
+|-----|-----------|------|
+| `claude` | Claude Code | `CLAUDE.md` |
+| `codex` | OpenAI Codex; тот же файл читают Cursor, Copilot coding agent, Jules, Zed | `AGENTS.md` |
+| `gemini` | Gemini CLI | `GEMINI.md` |
+| `copilot` | GitHub Copilot в редакторе | `.github/copilot-instructions.md` |
+
+Блок стоит между маркерами `study:begin` … `study:end`; всё вне его — личные правила
+(предметы, стиль коммитов, кто что делает), их `study agent` не трогает. После обновления
+инструмента — `study agent <код>` ещё раз: блок перепишется, личное останется. Без
+аргумента команда показывает, какие файлы есть и актуален ли в них блок. Можно поставить
+несколько операторов сразу: `study agent claude codex`.
+
 ## Ежедневная сводка в Claude Code
 
 Основной способ пользоваться инструментом: локальная задача Claude Code Desktop
@@ -79,7 +100,7 @@ rutube (`refresh`/`access`) инструмент ведёт сам в `.digest/.
 |------|----------|
 | Working folder | корень учебной директории |
 | Schedule | Daily, 9:00 |
-| Instructions | текст из `daily-digest-prompt.md` |
+| Instructions | текст из `docs/daily-digest-prompt.md` |
 
 После создания нажать **Run now** и на запросах разрешений выбрать «always allow»:
 разрешение выдаётся один раз на `study`, а не на каждую команду, иначе следующие
@@ -110,7 +131,7 @@ MSYS_NO_PATHCONV=1 wsl.exe -d ubuntu -- bash -c '~/work/study/.digest/study stat
 Файлы при этом читаются и по windows-пути напрямую, без `wsl.exe`: `stash/`, `NOTES.md`
 и `config.env` доступны как обычные файлы рабочей папки.
 
-Шаги задачи — в `daily-digest-prompt.md`, пути в нём относительные, от рабочей папки.
+Шаги задачи — в `docs/daily-digest-prompt.md`, пути в нём относительные, от рабочей папки.
 Вид сводки зашит в `studylib/digest.py`, функция `render`: разделы «Сроки» (просроченное
 и всё окно `DIGEST_DAYS`, срочное жирным, сданное не показывается), «Баллы» (итог по курсу
 — из работ, если Moodle его прячет — и баллы, появившиеся с прошлого запуска), «Уведомления» (только пришедшие после
@@ -124,6 +145,7 @@ MSYS_NO_PATHCONV=1 wsl.exe -d ubuntu -- bash -c '~/work/study/.digest/study stat
 study state [--days N] [--local] [--no-save] [--pull] [--since X]   готовая сводка; --pull забирает новые файлы в stash/
 study digest [--days N] [--no-save] [--since X]                     та же сводка, но только по ТУИС
 study answer <код предмета> <NN|hwNN> [--tag T]   заготовка ответа по лабораторной или домашней
+study agent [код ...]                    файл инструкций для ИИ-оператора: состояние / поставить
 
 study me                                 владелец токена и число доступных функций
 study courses [--all] [--setup]          курсы: список / интерактивная настройка игнора и папок
@@ -182,9 +204,11 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 | другой набор курсов в новом семестре | `study courses --setup` (правит `COURSE_IGNORE`/`CODE`) |
 | адрес Moodle, токены, глубина окна дедлайнов | `TUIS_URL`, `TUIS_TOKEN` и др., `DIGEST_DAYS` |
 | другой вид сводки | `studylib/digest.py`, функция `render` |
-| другие шаги проверки | `daily-digest-prompt.md` |
-| новые источники данных | `studylib/moodle.py` + `studylib/digest.py` + запись в `tuis-api.md` |
-| новый хостинг кода | класс в `studylib/hosting.py` + запись в `hosting-api.md` |
+| другие шаги проверки | `docs/daily-digest-prompt.md` |
+| правила для агента | `docs/AGENTS.md`, затем `study agent <код>` |
+| новые источники данных | `studylib/moodle.py` + `studylib/digest.py` + запись в `docs/tuis-api.md` |
+| новый хостинг кода | класс в `studylib/hosting.py` + запись в `docs/hosting-api.md` |
+| новый ИИ-оператор | строка в `OPERATORS` в `studylib/agent.py` |
 
 Отслеживаются все курсы из ТУИС, кроме перечисленных в `COURSE_IGNORE` (id через пробел).
 Локальную папку курса задаёт `CODE <id> <имя папки>`. Курс без папки попадает в сводку
@@ -223,7 +247,7 @@ RUTUBE_DEFENSE=       VK_DEFENSE=
 Отправка: `study upload <pdf>…` печатает `itemid`, затем
 `study submit <id-задания> --text <код предмета>/tuis/labNN.md --files <itemid> --confirm`.
 
-Полный порядок работы от выполнения до ответа на задание — `lab-submission.md`.
+Полный порядок работы от выполнения до ответа на задание — `docs/lab-submission.md`.
 
 ## Материалы курсов в `stash/`
 

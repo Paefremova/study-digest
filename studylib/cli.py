@@ -9,7 +9,7 @@ import pathlib
 import sys
 import time
 
-from . import answer, courses, digest, files, hosting, local
+from . import agent, answer, courses, digest, files, hosting, local
 from .config import Config, Course, StudyError
 from .fmt import moment, table
 from .moodle import Moodle
@@ -333,6 +333,20 @@ def cmd_answer(cfg, args):
     return d, answer.render(d)
 
 
+def cmd_agent(cfg, args):
+    rows = [agent.install(o) for o in args.operator] if args.operator \
+        else [agent.status(o) for o in agent.OPERATORS]
+    state = {True: "актуален", False: "устарел", None: "нет"}
+    lines = [table([[r["operator"], r["file"], state[r["current"] if r["installed"] else None],
+                     r["name"]] for r in rows], ["код", "файл", "блок", "кто читает"])]
+    if args.operator:
+        lines += ["", "Записано: " + ", ".join(r["path"] for r in rows),
+                  "Личные правила — в том же файле вне блока study:begin…study:end."]
+    else:
+        lines += ["", "Поставить: study agent <код> [<код>…]  (блок в корне учебной директории)"]
+    return rows, "\n".join(lines)
+
+
 # --- разбор аргументов
 
 # `--json` принимается и до, и после имени команды. SUPPRESS нужен, чтобы значение
@@ -369,6 +383,10 @@ def tuis_parsers(sub):
     s.add_argument("code", help="код предмета, каталог в ~/work/study")
     s.add_argument("num", help="номер лабораторной работы (hwNN — домашней)")
     s.add_argument("--tag", help="тег релиза; по умолчанию последний")
+
+    s = add(sub, "agent", "файл инструкций для ИИ-оператора в корне учебной директории", cmd_agent)
+    s.add_argument("operator", nargs="*", choices=list(agent.OPERATORS), metavar="оператор",
+                   help="claude | codex | gemini | copilot; без аргумента — состояние")
 
     add(sub, "me", "кто я и сколько функций доступно токену", cmd_me)
 
