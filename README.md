@@ -138,9 +138,9 @@ study sc releases | release <тег> --title T --notes F | update <тег> --not
 study rt jwt [--refresh T] | login [--email E] | me [--mode M] | api <путь>   вход и проверка Rutube
 study rt categories                          категории видео (id для --category; тегов у Rutube нет)
 study rt video <id-видео>                    метаданные и состояние своего видео
-study rt edit <id> [--title T | --desc <файл> | --category N | --hidden | --visible]   правка видео
+study rt edit <id> [--title T | --desc <файл> | --category N | --age {0,6,12,14,16,18} | --hidden | --visible]
 study rt playlist list | create --title T [--hidden] | add <id-плейлиста> <id-видео>
-study rt upload <файл> | --url U [--title T] [--category N] [--hidden] [--playlist ID] [--slot lab|report|presentation|defense] --confirm
+study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hidden] [--playlist ID] [--slot lab|report|presentation|defense] --confirm
 ```
 
 `--json` перед командой или после неё печатает те же данные машиночитаемо — ровно то,

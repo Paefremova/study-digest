@@ -277,7 +277,7 @@ def cmd_rt_video(cfg, args):
 
 
 def cmd_rt_edit(cfg, args):
-    fields = {"title": args.title, "category": args.category,
+    fields = {"title": args.title, "category": args.category, "age": args.age,
               "description": pathlib.Path(args.desc).read_text() if args.desc else None}
     if args.hidden:
         fields["is_hidden"] = True
@@ -311,12 +311,14 @@ def cmd_rt_upload(cfg, args):
         print("укажи либо файл, либо --url (одно из двух)")
         sys.exit(1)
     title = args.title or (pathlib.Path(args.file).stem if args.file else None)
+    category = args.category or 13
+    age = 0 if args.age is None else args.age
     if not args.confirm:
         size = f" ({pathlib.Path(args.file).stat().st_size} байт)" if args.file else ""
         print("\n".join(["Что будет загружено на Rutube:",
                          f"  источник: {('URL ' + args.url) if args.url else args.file + size}",
                          f"  название: {title or '?'}",
-                         f"  категория: {args.category or 'по умолчанию (13)'}",
+                         f"  категория: {category}   возраст: {age}+",
                          f"  видимость: {'скрыто' if args.hidden else 'публично'}",
                          f"  плейлист: {args.playlist or 'нет'}",
                          "", "Загрузка публикует видео в твой аккаунт. Повтори с --confirm."]))
@@ -324,7 +326,7 @@ def cmd_rt_upload(cfg, args):
     rt = rutube.Rutube(cfg, mode=args.mode)
     desc = pathlib.Path(args.desc).read_text() if args.desc else None
     up = rt.upload_url if args.url else rt.upload_file
-    v = up(args.url or args.file, title=title, description=desc, category=args.category, hidden=args.hidden)
+    v = up(args.url or args.file, title=title, description=desc, category=category, hidden=args.hidden, age=age)
     if args.playlist:
         rt.playlist_add(args.playlist, v["id"])
     text = "загружено: " + v["url"] + (" (скрыто)" if v["hidden"] else "")
@@ -488,6 +490,7 @@ def build_parser():
     ed.add_argument("--title")
     ed.add_argument("--desc", help="файл с описанием")
     ed.add_argument("--category", type=int, help="id категории (см. rt categories)")
+    ed.add_argument("--age", type=int, choices=[0, 6, 12, 14, 16, 18], help="возрастное ограничение")
     ed.add_argument("--hidden", action="store_true", help="сделать скрытым")
     ed.add_argument("--visible", action="store_true", help="сделать публичным")
     ed.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto")
@@ -512,7 +515,8 @@ def build_parser():
     up.add_argument("--url", help="импорт по URL — Rutube скачает сам")
     up.add_argument("--title")
     up.add_argument("--desc", help="файл с описанием")
-    up.add_argument("--category", type=int, help="id категории (см. rt categories)")
+    up.add_argument("--category", type=int, help="id категории (см. rt categories; по умолчанию 13)")
+    up.add_argument("--age", type=int, choices=[0, 6, 12, 14, 16, 18], help="возраст (по умолчанию 0+)")
     up.add_argument("--hidden", action="store_true", help="загрузить скрытым")
     up.add_argument("--playlist", help="id плейлиста — сразу добавить туда")
     up.add_argument("--slot", choices=["lab", "report", "presentation", "defense"],

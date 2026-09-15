@@ -24,6 +24,8 @@ REFRESH_URL = "https://rutube.ru/multipass/api/v3/accounts/token/"
 UPLOAD_URL = "https://u.rutube.ru/upload/"
 # u.rutube.ru за антиботом — ходим с браузерными UA/Origin/Referer, как студия.
 WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+# Возрастное ограничение: человеческий возраст → age_id (справочник зашит в студию, эндпоинта нет).
+AGE = {0: 1, 6: 2, 12: 3, 14: 6, 16: 4, 18: 5}
 
 
 def _extract_refresh(s):
@@ -178,8 +180,11 @@ class Rutube:
         return self.api(f"/v2/video/{vid}/") or {}
 
     def edit(self, vid, **fields):
-        """PATCH метаданных: только переданные (не None) поля title/description/category/is_hidden."""
+        """PATCH метаданных: title/description/category (int id)/is_hidden/age (0,6,12,14,16,18)."""
+        age = fields.pop("age", None)
         body = {k: v for k, v in fields.items() if v is not None}
+        if age is not None:
+            body["age_restriction"] = AGE.get(int(age), int(age))
         if not body:
             raise StudyError(self.source, "нечего менять", code="usage")
         return self.api(f"/v2/video/{vid}/?client=vulp", method="PATCH", json_body=body) or {}
@@ -217,17 +222,17 @@ class Rutube:
         """Прогресс загрузки/конвертации видео."""
         return self.api(f"/uploader/{vid}/progress/") or {}
 
-    def upload_url(self, src, title=None, description=None, category=None, hidden=False):
+    def upload_url(self, src, title=None, description=None, category=None, hidden=False, age=None):
         """Импорт по URL: Rutube сам скачает файл, затем правим метаданные."""
         out = self.api("/video/", method="POST",
                        json_body={"url": src, "category_id": category or 13}) or {}
         vid = out.get("video_id") or out.get("id")
         if not vid:
             raise StudyError(self.source, f"video/ без id: {out}", code="upload")
-        self.edit(vid, title=title, description=description, category=category, is_hidden=bool(hidden))
+        self.edit(vid, title=title, description=description, category=category, is_hidden=bool(hidden), age=age)
         return {"id": vid, "url": f"https://rutube.ru/video/{vid}/", "title": title, "hidden": bool(hidden)}
 
-    def upload_file(self, path, title=None, description=None, category=None, hidden=False):
+    def upload_file(self, path, title=None, description=None, category=None, hidden=False, age=None):
         """Прямая загрузка локального файла: сессия → метаданные → байты (tus)."""
         title = title or os.path.splitext(os.path.basename(path))[0]
         sess = self.api("/uploader/upload_session/?client=vulp&batch_id=" + uuid.uuid4().hex,
@@ -235,7 +240,7 @@ class Rutube:
         sid, vid = sess.get("sid"), sess.get("video")
         if not sid or not vid:
             raise StudyError(self.source, f"upload_session без sid/video: {sess}", code="upload")
-        self.edit(vid, title=title, description=description, category=category, is_hidden=bool(hidden))
+        self.edit(vid, title=title, description=description, category=category, is_hidden=bool(hidden), age=age)
         self._tus(sid, vid, path)
         return {"id": vid, "url": f"https://rutube.ru/video/{vid}/", "title": title, "hidden": bool(hidden)}
 
