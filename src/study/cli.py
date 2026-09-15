@@ -9,7 +9,7 @@ import pathlib
 import sys
 import time
 
-from . import agent, answer, courses, digest, files, hosting, local
+from . import agent, answer, courses, digest, files, hosting, local, update
 from .config import Config, Course, StudyError
 from .fmt import moment, table
 from .moodle import Moodle
@@ -333,6 +333,18 @@ def cmd_answer(cfg, args):
     return d, answer.render(d)
 
 
+def cmd_update(cfg, args):
+    d = update.check() if args.check else update.apply()
+    if d is None:
+        return d, "Это не git-клон с upstream: обновлять нечего."
+    if args.check:
+        return d, "\n".join(update.note(d)) or f"Актуально: {d['version']}."
+    lines = ([f"Обновлено: {d['version']} → {d['now']}"] + [f"  {c}" for c in d["commits"]]
+             if d["updated"] else [f"Уже актуально: {d['now']}."])
+    lines += [f"Блок агента обновлён: {f}" for f in d["refreshed"]]
+    return d, "\n".join(lines)
+
+
 def cmd_agent(cfg, args):
     rows = [agent.install(o) for o in args.operator] if args.operator \
         else [agent.status(o) for o in agent.OPERATORS]
@@ -384,6 +396,9 @@ def tuis_parsers(sub):
     s.add_argument("code", help="код предмета, каталог в ~/work/study")
     s.add_argument("num", help="номер лабораторной работы (hwNN — домашней)")
     s.add_argument("--tag", help="тег релиза; по умолчанию последний")
+
+    s = add(sub, "update", "обновить study из репозитория и блоки агента", cmd_update)
+    s.add_argument("--check", action="store_true", help="только проверить, ничего не менять")
 
     s = add(sub, "agent", "файл инструкций для ИИ-оператора в корне учебной директории", cmd_agent)
     s.add_argument("operator", nargs="*", choices=list(agent.OPERATORS), metavar="оператор",
@@ -511,6 +526,7 @@ def build_parser():
     p = argparse.ArgumentParser(
         prog="study", description="ТУИС, репозитории курсов и хостинги одной командой.")
     p.add_argument("--json", action="store_true", help="машиночитаемый вывод")
+    p.add_argument("--version", action="version", version=f"study {update.version()}")
     sub = p.add_subparsers(dest="cmd", required=True, metavar="команда")
     tuis_parsers(sub)
     host_parsers(sub)

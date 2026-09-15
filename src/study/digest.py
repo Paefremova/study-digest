@@ -5,7 +5,7 @@
 import contextlib
 import time
 
-from . import files, hosting, local
+from . import files, hosting, local, update
 from .config import Course, StudyError
 from .fmt import md_table, moment, parse_name, plain, short_name, weekday
 from .snapshot import load_state, save_state
@@ -463,6 +463,8 @@ def render(d):
     if t.get("outside"):
         out.append("\nКурс в COURSE_IGNORE или скрыт в ТУИС: убрать из игнора "
                    "(`study courses --setup`) или убедиться, что он неактуален.")
+    if update.note(d.get("update")):
+        out.append("\n" + "\n".join(update.note(d["update"])))
 
     todo = t.get("not_started") or []
     if todo:
@@ -552,6 +554,11 @@ def state(cfg, moodle, days=None, with_tuis=True, save=True, pull=False, since=N
     courses = [course_state(cfg, Course(cid, code, titles.get(cid, "")), by_lab, errors)
                for cid, code in cfg.codes().items()]
 
+    # Есть ли обновление самого инструмента и актуальны ли блоки агента — только подсказка
+    upd = None
+    with soft(errors, "обновление study"):
+        upd = update.check()
+
     return {"schema": 1, "now": moment(int(time.time())), "days": days or cfg.days(),
-            "tuis": tuis, "courses": courses,
+            "tuis": tuis, "courses": courses, "update": upd,
             "errors": errors + t.get("errors", [])}

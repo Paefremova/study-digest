@@ -1,4 +1,5 @@
 """Локальное состояние: git, репозиторий курса, лабы, собранные файлы."""
+import os
 import pathlib
 import re
 import subprocess
@@ -14,9 +15,24 @@ VIDEO_KEYS = [f"{site}_{slot}" for site in SITES for slot in ["PLAYLIST", *SLOTS
 WORK_DIRS = {"lab": "labs", "hw": "homework"}
 
 
-def git(path, *args, check=False):
-    """stdout команды git в каталоге path; при ошибке — "" (или StudyError, если check)."""
-    r = subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True, check=False)
+def run(path, *args, timeout=None):
+    """CompletedProcess команды git в каталоге path; None — не дождались за timeout.
+    Сетевые команды идут без запросов пароля: в задаче по расписанию терминала нет."""
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_SSH_COMMAND": "ssh -o BatchMode=yes"}
+    try:
+        return subprocess.run(["git", "-C", str(path), *args], capture_output=True, text=True,
+                              check=False, timeout=timeout, env=env)
+    except subprocess.TimeoutExpired:
+        return None
+
+
+def git(path, *args, check=False, timeout=None):
+    """stdout команды git; при ошибке или таймауте — "" (StudyError, если check)."""
+    r = run(path, *args, timeout=timeout)
+    if r is None:
+        if check:
+            raise StudyError("git", f"нет ответа за {timeout} с", where=" ".join(args))
+        return ""
     if r.returncode and check:
         raise StudyError("git", (r.stderr or r.stdout).strip() or "ошибка", where=" ".join(args))
     return r.stdout.strip() if not r.returncode else ""
