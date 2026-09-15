@@ -45,6 +45,18 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(e.exception.code, "notoken")
         self.assertTrue(e.exception.hint())
 
+    def test_put(self):
+        cfg = self.write("# пример\nTUIS_TOKEN=old\nCODE 5 five\nDIGEST_DAYS=7\n")
+        cfg.put("TUIS_TOKEN", "new")
+        cfg.put("GITVERSE_TOKEN", "gv")
+        self.assertEqual(self.path.read_text(encoding="utf-8"),
+                         "# пример\nCODE 5 five\nDIGEST_DAYS=7\n"
+                         "TUIS_TOKEN=new\nGITVERSE_TOKEN=gv\n")
+        self.assertEqual((cfg.token("TUIS_TOKEN"), cfg.get("GITVERSE_TOKEN")), ("new", "gv"))
+        self.assertEqual(Config(self.path).codes(), {5: "five"})
+        if os.name == "posix":
+            self.assertEqual(oct(self.path.stat().st_mode)[-3:], "600")
+
     def test_track(self):
         cfg = self.write("COURSE_IGNORE=2\nCODE 1 one\n")
         got = cfg.track([{"id": 1, "fullname": "Один"}, {"id": 2, "fullname": "Два"}, {"id": 3}])

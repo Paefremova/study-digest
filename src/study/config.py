@@ -127,6 +127,13 @@ class Config:
             self._tokens[name] = val
         return self._tokens[name]
 
+    def put(self, key, value):
+        """KEY=value в config.env: заменить строку с этим ключом или дописать в конец."""
+        lines = self.path.read_text(encoding="utf-8").splitlines() if self.path.exists() else []
+        self._write([ln for ln in lines if not re.match(rf"\s*{key}\s*=", ln)] + [f"{key}={value}"])
+        self._values[key] = value
+        self._tokens.pop(key, None)
+
     # --- курсы
 
     def ignore(self):
