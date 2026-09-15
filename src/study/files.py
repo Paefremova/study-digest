@@ -76,7 +76,7 @@ def listing(cfg, moodle, course, since=None, everything=False):
                     out.append(item)
     out.sort(key=lambda x: -(x["modified"]["ts"] if x["modified"] else 0))
     return {"course": course.as_dict(), "stash": str(into), "since": moment(since),
-            "files": out}
+            "all": everything, "files": out}
 
 
 def pull(moodle, data, force=False):
@@ -104,9 +104,10 @@ def pull(moodle, data, force=False):
 
 def render(d, pulled=False):
     """Список файлов с отметкой: скачан / уже есть / пропущен и почему / можно забрать."""
-    out = ["Курс: {} · stash: {}".format(d["course"]["title"], d["stash"]),
-           "Новым считается всё, что изменилось после {}".format(
-               d["since"]["full"] if d["since"] else "начала времён")]
+    out = [f"Курс: {d['course']['title'] or d['course']['id']} · stash: {d['stash']}",
+           "Все файлы курса" if d["all"] else
+           f"Новым считается всё, что изменилось после "
+           f"{d['since']['full'] if d['since'] else 'начала времён'}"]
     if not d["files"]:
         out.append("\nНовых файлов нет.")
         return "\n".join(out)

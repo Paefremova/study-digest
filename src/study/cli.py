@@ -103,12 +103,15 @@ def cmd_calendar(cfg, args):
                         for r in rows]) or "нет событий"
 
 
+def named(cfg, m, value):
+    """Курс по id или папке — с названием из ТУИС, если он там есть."""
+    c = course_of(cfg, value)
+    return next((t for t in cfg.track(m.courses()) if t.id == c.id), c)
+
+
 def cmd_grades(cfg, args):
     m = Moodle(cfg)
-    tracked = cfg.track(m.courses())
-    if args.course:
-        c = course_of(cfg, args.course)
-        tracked = [next((t for t in tracked if t.id == c.id), c)]
+    tracked = [named(cfg, m, args.course)] if args.course else cfg.track(m.courses())
     rows, lines = [], []
     for c in tracked:
         try:
@@ -134,7 +137,7 @@ def cmd_grades(cfg, args):
 
 def cmd_files(cfg, args):
     m = Moodle(cfg)
-    course = course_of(cfg, args.course)
+    course = named(cfg, m, args.course)
     # в пустую stash/ забираем всё: сравнивать «новое с прошлого запуска» не с чем
     d = files.listing(cfg, m, course, everything=args.all or files.empty(course))
     if args.pull:
