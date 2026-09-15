@@ -87,3 +87,18 @@ def http_code(url, source, **kw):
         return 201
     except StudyError as e:
         raise e
+
+
+def send(url, source, *, method, headers=None, data=None, timeout=600, where=None):
+    """Низкоуровневый запрос с доступом к коду и заголовкам ответа — нужно tus (Upload-Offset, Location)."""
+    head = {"User-Agent": UA}
+    head.update(headers or {})
+    req = urllib.request.Request(url, data=data, headers=head, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, dict(r.headers), r.read()
+    except urllib.error.HTTPError as e:
+        detail = (e.read() or b"")[:200].decode("utf-8", "replace").strip()
+        raise StudyError(source, f"HTTP {e.code}" + (f": {detail}" if detail else ""), where=where) from None
+    except urllib.error.URLError as e:
+        raise StudyError(source, f"нет связи: {e.reason}", where=where) from None

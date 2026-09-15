@@ -306,6 +306,33 @@ def cmd_rt_pl_add(cfg, args):
     return out, f"видео {args.video_id} → плейлист {args.playlist_id}"
 
 
+def cmd_rt_upload(cfg, args):
+    if bool(args.file) == bool(args.url):
+        print("укажи либо файл, либо --url (одно из двух)")
+        sys.exit(1)
+    title = args.title or (pathlib.Path(args.file).stem if args.file else None)
+    if not args.confirm:
+        size = f" ({pathlib.Path(args.file).stat().st_size} байт)" if args.file else ""
+        print("\n".join(["Что будет загружено на Rutube:",
+                         f"  источник: {('URL ' + args.url) if args.url else args.file + size}",
+                         f"  название: {title or '?'}",
+                         f"  категория: {args.category or 'по умолчанию (13)'}",
+                         f"  видимость: {'скрыто' if args.hidden else 'публично'}",
+                         f"  плейлист: {args.playlist or 'нет'}",
+                         "", "Загрузка публикует видео в твой аккаунт. Повтори с --confirm."]))
+        sys.exit(1)
+    rt = rutube.Rutube(cfg, mode=args.mode)
+    desc = pathlib.Path(args.desc).read_text() if args.desc else None
+    up = rt.upload_url if args.url else rt.upload_file
+    v = up(args.url or args.file, title=title, description=desc, category=args.category, hidden=args.hidden)
+    if args.playlist:
+        rt.playlist_add(args.playlist, v["id"])
+    text = "загружено: " + v["url"] + (" (скрыто)" if v["hidden"] else "")
+    if args.slot:
+        text += f"\nRUTUBE_{args.slot.upper()}={v['url']}"
+    return v, text
+
+
 # --- сводки
 
 def cmd_digest(cfg, args):
@@ -479,6 +506,19 @@ def build_parser():
     pla.add_argument("playlist_id")
     pla.add_argument("video_id")
     pla.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto")
+    up = rts.add_parser("upload", help="загрузить видео: файл (tus) или --url", parents=[common])
+    up.set_defaults(fn=cmd_rt_upload)
+    up.add_argument("file", nargs="?", help="локальный видеофайл (либо задать --url)")
+    up.add_argument("--url", help="импорт по URL — Rutube скачает сам")
+    up.add_argument("--title")
+    up.add_argument("--desc", help="файл с описанием")
+    up.add_argument("--category", type=int, help="id категории (см. rt categories)")
+    up.add_argument("--hidden", action="store_true", help="загрузить скрытым")
+    up.add_argument("--playlist", help="id плейлиста — сразу добавить туда")
+    up.add_argument("--slot", choices=["lab", "report", "presentation", "defense"],
+                    help="напечатать строку RUTUBE_<SLOT>= для tuis/labNN.env")
+    up.add_argument("--confirm", action="store_true", help="подтвердить загрузку (без него — план)")
+    up.add_argument("--mode", choices=["auto", "jwt", "token"], default="auto")
     return p
 
 

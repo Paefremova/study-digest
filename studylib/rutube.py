@@ -14,12 +14,16 @@ import getpass
 import json
 import os
 import time
+import uuid
 
 from . import net
 from .config import StudyError
 
 BASE = "https://rutube.ru/api"
 REFRESH_URL = "https://rutube.ru/multipass/api/v3/accounts/token/"
+UPLOAD_URL = "https://u.rutube.ru/upload/"
+# u.rutube.ru за антиботом — ходим с браузерными UA/Origin/Referer, как студия.
+WEB_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
 
 
 def _extract_refresh(s):
@@ -206,3 +210,45 @@ class Rutube:
         """Добавить видео vid в плейлист pid (в пути — id видео, include — id плейлистов)."""
         return self.api(f"/playlist/custom/update/{vid}/", method="POST",
                         json_body={"include": [int(pid)], "exclude": []}) or {}
+
+    # --- загрузка ---
+
+    def progress(self, vid):
+        """Прогресс загрузки/конвертации видео."""
+        return self.api(f"/uploader/{vid}/progress/") or {}
+
+    def upload_url(self, src, title=None, description=None, category=None, hidden=False):
+        """Импорт по URL: Rutube сам скачает файл, затем правим метаданные."""
+        out = self.api("/video/", method="POST",
+                       json_body={"url": src, "category_id": category or 13}) or {}
+        vid = out.get("video_id") or out.get("id")
+        if not vid:
+            raise StudyError(self.source, f"video/ без id: {out}", code="upload")
+        self.edit(vid, title=title, description=description, category=category, is_hidden=bool(hidden))
+        return {"id": vid, "url": f"https://rutube.ru/video/{vid}/", "title": title, "hidden": bool(hidden)}
+
+    def upload_file(self, path, title=None, description=None, category=None, hidden=False):
+        """Прямая загрузка локального файла: сессия → метаданные → байты (tus)."""
+        title = title or os.path.splitext(os.path.basename(path))[0]
+        sess = self.api("/uploader/upload_session/?client=vulp&batch_id=" + uuid.uuid4().hex,
+                        method="POST", json_body={"title": title}) or {}
+        sid, vid = sess.get("sid"), sess.get("video")
+        if not sid or not vid:
+            raise StudyError(self.source, f"upload_session без sid/video: {sess}", code="upload")
+        self.edit(vid, title=title, description=description, category=category, is_hidden=bool(hidden))
+        self._tus(sid, vid, path)
+        return {"id": vid, "url": f"https://rutube.ru/video/{vid}/", "title": title, "hidden": bool(hidden)}
+
+    def _tus(self, sid, vid, path):
+        """tus creation-with-upload: весь файл одним POST (как студийный клиент, chunkSize=∞)."""
+        b64 = lambda s: base64.b64encode(str(s).encode()).decode()
+        meta = f"sessionId {b64(sid)},videoId {b64(vid)},userId {b64(self._channel_id())}"
+        body = open(path, "rb").read()
+        head = {"User-Agent": WEB_UA, "Tus-Resumable": "1.0.0", "Origin": "https://studio.rutube.ru",
+                "Referer": "https://studio.rutube.ru/", "Content-Type": "application/offset+octet-stream",
+                "Upload-Length": str(len(body)), "Upload-Metadata": meta}
+        _, hd, _ = net.send(UPLOAD_URL + sid, self.source, method="POST", headers=head, data=body, where="tus")
+        got = int(hd.get("Upload-Offset", 0))
+        if got != len(body):
+            raise StudyError(self.source, f"загружено {got} из {len(body)} байт", code="upload")
+        return got

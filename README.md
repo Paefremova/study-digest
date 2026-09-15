@@ -140,6 +140,7 @@ study rt categories                          категории видео (id �
 study rt video <id-видео>                    метаданные и состояние своего видео
 study rt edit <id> [--title T | --desc <файл> | --category N | --hidden | --visible]   правка видео
 study rt playlist list | create --title T [--hidden] | add <id-плейлиста> <id-видео>
+study rt upload <файл> | --url U [--title T] [--category N] [--hidden] [--playlist ID] [--slot lab|report|presentation|defense] --confirm
 ```
 
 `--json` перед командой или после неё печатает те же данные машиночитаемо — ровно то,
