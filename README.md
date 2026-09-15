@@ -51,7 +51,7 @@ rutube (`refresh`/`access`) инструмент ведёт сам в `.digest/.
 | Moodle | профиль → «Ключи безопасности» → служба *Moodle mobile web service*; значение показывается один раз |
 | GitVerse | иконка пользователя → Настройки → Управление токенами, доступ «Репозитории» |
 | SourceCraft | Home → Access → Personal Access Tokens |
-| Rutube | два режима на выбор. **jwt** (для аккаунтов через VK ID / Gazprom ID — `auth_type=gid`): один раз скопировать `refreshToken` из cookie браузера (rutube.ru → DevTools → Application → Cookies) и сохранить командой `study rt jwt` — дальше годовой refresh сам минтит короткий access, вход не нужен. **token** (только для аккаунтов с паролем, `auth_type=password`): `study rt login` — спросит email и пароль, сохранит токен в `~/.config/rutube/token`. Режим для `rt me`/`rt api` задаёт `--mode {auto,jwt,token}` (auto предпочитает jwt) |
+| Rutube | два режима на выбор. **jwt** (для аккаунтов через VK ID / Gazprom ID — `auth_type=gid`): один раз скопировать `refreshToken` из cookie браузера (rutube.ru → DevTools → Application → Cookies) и сохранить командой `study rt jwt` — дальше годовой refresh сам минтит короткий access, вход не нужен. **token** (только для аккаунтов с паролем, `auth_type=password`): `study rt login` — спросит email и пароль, сохранит токен в `.digest/.secrets/rutube-token`. Режим для `rt me`/`rt api` задаёт `--mode {auto,jwt,token}` (auto предпочитает jwt) |
 
 Свои настройки лежат в `config.env` — он создаётся при установке из
 `config.env.example` и в репозиторий не попадает. Курсы настраивает `setup.sh`
@@ -151,9 +151,9 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 `--json` перед командой или после неё печатает те же данные машиночитаемо — ровно то,
 что видит человекочитаемый вывод, без второго обхода API.
 
-«Новое» в сводке — новое с прошлого запуска: снимок состояния (`~/.config/tuis/state.json`:
+«Новое» в сводке — новое с прошлого запуска: снимок состояния (`.digest/.state.json`:
 время запуска, сроки заданий, баллы) обновляется каждым `state`/`digest` без `--no-save`,
-а копия за день ложится в `~/.config/tuis/state/ГГГГ-ММ-ДД.json` (хранятся 60 дней).
+а копия за день ложится в `.digest/state/ГГГГ-ММ-ДД.json` (хранятся 60 дней).
 `--since` пересчитывает сводку от другой точки: `--since 2026-09-12` или `--since 3`
 (дней назад) берёт ближайший снимок не позже этой даты — а пока истории нет, текущий
 снимок с этой датой как точкой отсчёта; `--since never` — как будто запусков не было

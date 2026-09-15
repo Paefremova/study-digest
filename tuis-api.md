@@ -4,12 +4,12 @@ Moodle 4.5 на `https://esystem.rudn.ru`. Все вызовы — POST на
 `/webservice/rest/server.php` с параметрами `wstoken`, `wsfunction`, `moodlewsrestformat=json`.
 Загрузка файлов — отдельный эндпоинт `/webservice/upload.php`.
 
-Токен: `~/.config/tuis/token` (права 600). Получается в профиле Moodle,
+Токен: строкой `TUIS_TOKEN` в `config.env` (запасной вариант — файл `~/.config/tuis/token`). Получается в профиле Moodle,
 раздел «Ключи безопасности», служба **Moodle mobile web service**; значение
 показывается один раз при создании или после «Очистка». Токен даёт полный
 доступ к учётной записи — в репозитории и заметки не класть.
 
-Обёртки — единый CLI `digest/study`: произвольный вызов `study call <функция> ключ=значение`,
+Обёртки — единый CLI `.digest/study`: произвольный вызов `study call <функция> ключ=значение`,
 сводка `study digest`, состояние `study state`. Про хостинги кода — `hosting-api.md`.
 
 ## Что используется сейчас
