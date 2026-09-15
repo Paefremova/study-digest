@@ -40,6 +40,16 @@ def patch(case, obj, attr, value):
     case.addCleanup(p.stop)
 
 
+def passed(case):
+    """Не упал ли тест к моменту cleanup: частный API unittest, две его формы (3.8–3.10 и 3.11+)."""
+    o = getattr(case, "_outcome", None)
+    if o is None:
+        return True
+    if hasattr(o, "errors"):
+        return not any(exc for _, exc in o.errors)
+    return not any(t is case for t, _ in o.result.failures + o.result.errors)
+
+
 def tmpdir(case):
     """Временный каталог и чистое окружение: без настроек study и без чужого gitconfig."""
     clean = {k: v for k, v in os.environ.items() if not ENV.match(k)}
@@ -130,8 +140,7 @@ class FakeNet:
     def install(self, case):
         patch(case, net, "send", self.send)
         # очередь проверяется только у прошедшего теста: упавший и так отчитался
-        case.addCleanup(lambda: getattr(getattr(case, "_outcome", None), "success", True)
-                        and self.done())
+        case.addCleanup(lambda: passed(case) and self.done())
         return self
 
     def reply(self, method, what, body=None, headers=None):

@@ -1,14 +1,13 @@
 import os
-import pathlib
-import tempfile
 import unittest
 
 from study.config import Config, StudyError
+from tests.fakes import tmpdir
 
 
 class ConfigTest(unittest.TestCase):
     def setUp(self):
-        self.dir = pathlib.Path(tempfile.mkdtemp())
+        self.dir = tmpdir(self)
         self.path = self.dir / "config.env"
 
     def write(self, text):

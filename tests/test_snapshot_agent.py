@@ -6,11 +6,12 @@ import unittest
 
 from study import agent, snapshot, update
 from study.config import Config, StudyError
+from tests.fakes import tmpdir
 
 
 class SnapshotTest(unittest.TestCase):
     def setUp(self):
-        self.dir = pathlib.Path(tempfile.mkdtemp())
+        self.dir = tmpdir(self)
         (self.dir / "config.env").write_text(f"DIGEST_STATE={self.dir / '.state.json'}\n")
         self.cfg = Config(self.dir / "config.env")
 
