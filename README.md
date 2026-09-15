@@ -4,9 +4,11 @@
 > релизы на GitVerse и SourceCraft, видео на Rutube — и готовая утренняя сводка,
 > которую дочитывает ИИ-агент.
 
+[![ci](https://github.com/nowherewashere/study-digest/actions/workflows/ci.yml/badge.svg)](https://github.com/nowherewashere/study-digest/actions/workflows/ci.yml)
 ![python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![deps](https://img.shields.io/badge/зависимости-только%20stdlib-success)
 ![platform](https://img.shields.io/badge/платформа-Linux%20%7C%20WSL-lightgrey)
+[![license](https://img.shields.io/badge/лицензия-MIT-green)](LICENSE)
 
 ## Содержание
 
@@ -22,6 +24,8 @@
 - [Обновление и версии](#обновление-и-версии)
 - [Рабочий процесс](#рабочий-процесс)
 - [Документация и устройство](#документация-и-устройство)
+- [Разработка](#разработка)
+- [Лицензия](#лицензия)
 
 ## Возможности
 
@@ -326,6 +330,7 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 ├── src/study/            пакет: cli · digest (сводка) · moodle · hosting · rutube · files
 │                         · answer · courses · agent · config · net · fmt · local · snapshot
 ├── docs/                 документация
+├── tests/                unittest, только stdlib
 ├── setup.sh              установка и настройка
 ├── config.env.example    шаблон настроек
 ├── pyproject.toml        настройки проверки кода (ruff); пакет через pip не ставится
@@ -333,5 +338,19 @@ study rt upload <файл> | --url U [--title T] [--category N] [--age A] [--hid
 ```
 
 Все внешние вызовы идут через `src/study/net.py` (urllib), особенности каждого API спрятаны
-в его клиенте; `cli.py` только разбирает аргументы и печатает. Зависимостей нет;
-проверка кода — `ruff check` (правила в `pyproject.toml`) и `shellcheck setup.sh`.
+в его клиенте; `cli.py` только разбирает аргументы и печатает.
+
+## Разработка
+
+```bash
+python3 -m unittest -v            # тесты: чистые функции, разбор config.env, снимки, блок агента
+uvx ruff check src tests study    # стиль и ошибки, правила в pyproject.toml
+shellcheck setup.sh
+```
+
+То же самое гоняет CI на Python 3.8 и 3.12 при каждом push. Коммиты — conventional
+(`feat`, `fix`, `docs`, `refactor`, `style`, `test`, `ci`), версии — теги `vX.Y.Z` и Releases.
+
+## Лицензия
+
+[MIT](LICENSE).

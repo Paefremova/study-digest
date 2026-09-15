@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.8", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Тесты
+        run: python -m unittest -v
+      - name: Синтаксис
+        run: python -m compileall -q src study
+      - name: ruff
+        if: matrix.python == '3.12'
+        run: pipx run ruff check src tests study
+      - name: shellcheck
+        if: matrix.python == '3.12'
+        run: shellcheck -S warning setup.sh
