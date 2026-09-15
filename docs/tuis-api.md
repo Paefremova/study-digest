@@ -28,7 +28,7 @@ Moodle 4.5 на `https://esystem.rudn.ru` (адрес — `TUIS_URL` в `config.
 | `mod_quiz_get_quizzes_by_courses` | тесты курсов: `timeopen`, `timeclose`, `timelimit`, число попыток | `courseids[]` |
 | `mod_choice_get_choices_by_courses` | элементы «выбор темы доклада»: `id` и `coursemodule` для связи с cmid из состава курса | `courseids[]` |
 | `mod_choice_get_choice_options` | варианты выбора; у выбранного `checked: true` — так видно, выбрана ли тема | `choiceid` |
-| `mod_quiz_get_user_attempts` | мои попытки прохождения теста: `state` — `finished` (тест сдан, в сводке прячется как задание со статусом submitted), `inprogress`/`overdue` (начат, не отправлен). `sumgrades: null` у сданной попытки — балл ещё не выставлен или скрыт, в журнал оценок такой элемент не попадает вовсе | `quizid`, `status=all` |
+| `mod_quiz_get_user_attempts` | мои попытки прохождения теста: `state` — `finished` (тест сдан, в разделе «Тесты» не показывается), `inprogress`/`overdue` (начат, не отправлен). `sumgrades: null` у сданной попытки — балл ещё не выставлен или скрыт, в журнал оценок такой элемент не попадает вовсе | `quizid`, `status=all` |
 | `gradereport_user_get_grade_items` | баллы: строки ведомости, `graderaw`/`grademax`, итог курса | `courseid`, `userid` |
 | `core_calendar_get_action_events_by_timesort` | события календаря: сроки всех курсов, в том числе не из `config.env` | `timesortfrom`, `timesortto`, `limitnum` (максимум **50**), дальше — курсор `aftereventid` = `lastid` прошлого ответа. Сдвигать `timesortfrom` нельзя: дедлайны массово стоят в 23:59 одного дня, и события с одинаковым `timesort` на границе страницы теряются |
 | `core_message_get_messages` | уведомления ТУИС (о сроках, о проверке работ) | `useridto`, `type=notifications`, `read=0`, `limitnum` |

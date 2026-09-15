@@ -159,12 +159,12 @@ class Collector:
                 a["submission"] = "submitted" if mine else "new"
 
     def quizzes(self):
-        """Тесты с открытым сроком: в окне — в общую таблицу, дальше — отдельным списком."""
-        ahead = []
+        """Тесты с открытым сроком на месяц вперёд — отдельный раздел, не «Сроки»."""
+        out = []
         with self.soft("тесты"):
             for q in self.moodle.quizzes(list(self.courses)):
                 close = q.get("timeclose") or 0
-                if not close or close < self.now:
+                if not close or not self.now <= close <= self.now + MONTH:
                     continue
                 tries = None
                 with self.soft(f"попытки теста {q['id']}"):
@@ -180,8 +180,8 @@ class Collector:
                         "attempts_used": None if tries is None else len(tries),
                         "attempts_max": q.get("attempts") or None,
                         "timelimit_min": (q.get("timelimit") or 0) // 60 or None}
-                (self.soon if close <= self.horizon else ahead).append(item)
-        return ahead
+                out.append(item)
+        return by_due(out)
 
     def updates(self):
         """Что изменилось в курсах с прошлого запуска — с именами новых файлов."""
@@ -271,7 +271,6 @@ class Collector:
         new, moved = self.assignments()
         self.activities()
         self.choices()
-        ahead = self.quizzes()
         deadlines = by_due(self.soon)
         overdue = by_due(self.overdue)
         return {
@@ -285,7 +284,7 @@ class Collector:
             # просроченное и несданное — впереди: пересдача всё ещё стоит баллов
             "not_started": [a for a in overdue + deadlines
                             if a["source"] == "assign_api" and a["submission"] == "new"],
-            "quizzes_ahead": by_due(ahead),
+            "quizzes": self.quizzes(),
             "updates": self.updates(), "new_assignments": new, "moved": moved,
             "notifications": self.notifications(), "grades": self.grades(),
             "outside": self.outside(),
@@ -330,10 +329,6 @@ def status_of(a):
     if pick:
         return ("выбрана: " + pick["chosen"] if pick["chosen"]
                 else f"не выбрана, {pick['options']} вариантов")
-    if a["kind"] == "quiz":
-        lim = f", {a['timelimit_min']} мин" if a["timelimit_min"] else ""
-        head = "начат, не отправлен; " if a["open_attempt"] else ""
-        return head + "попыток " + attempts(a) + lim
     if a["submission"] is None:
         # статус не получен (ошибка в errors) или элемент без ответа: опрос, взаимная проверка
         return KINDS.get(a.get("modname"), "?") if a["kind"] == "activity" else "?"
@@ -399,8 +394,7 @@ def deadline_rows(t):
         if a["submission"] == "submitted":
             continue
         cells = [a["due"]["text"], a["due"]["left"], a["short"], label(a), status_of(a)]
-        urgent = a["due"]["left_sec"] < URGENT or a.get("open_attempt")
-        rows.append(bold(cells) if urgent else cells)
+        rows.append(bold(cells) if a["due"]["left_sec"] < URGENT else cells)
     return rows
 
 
@@ -414,10 +408,16 @@ def grade_rows(t):
 
 
 def quiz_rows(t):
-    return [[q["short"], label(q), q["due"]["full"], attempts(q),
-             f"{q['timelimit_min']} мин" if q["timelimit_min"] else "—"]
-            for q in t.get("quizzes_ahead", [])
-            if q["due"]["left_sec"] < MONTH and q["submission"] != "submitted"]
+    """«Тесты»: пройденные не показываются; срочные и начатые, но не отправленные — жирным."""
+    rows = []
+    for q in t.get("quizzes", []):
+        if q["submission"] == "submitted":
+            continue
+        tries = ("начат, не отправлен; " if q["open_attempt"] else "") + attempts(q)
+        cells = [q["due"]["text"], q["due"]["left"], q["short"], label(q), tries,
+                 f"{q['timelimit_min']} мин" if q["timelimit_min"] else "—"]
+        rows.append(bold(cells) if q["due"]["left_sec"] < URGENT or q["open_attempt"] else cells)
+    return rows
 
 
 def outside_rows(t):
@@ -450,11 +450,11 @@ def render(d):
         out.append("\n" + "; ".join(trouble) + ".")
 
     sections = [
+        ("Тесты", quiz_rows(t), ["Когда", "Осталось", "Тест", "Курс", "Попытки", "Время"]),
         ("Баллы", grade_rows(t), ["Курс", "Итого", "Новое"]),
         ("Уведомления", [[n["at"]["text"], n["subject"]] for n in t.get("notifications", [])],
          ["Когда", "Тема"]),
         ("Новое в курсах", news, ["Курс", "Раздел", "Что", "Файлы"]),
-        ("Тесты", quiz_rows(t), ["Тест", "Курс", "Когда", "Попытки", "Время"]),
         ("Дедлайны вне списка курсов", outside_rows(t), ["Когда", "Работа", "Курс"]),
     ]
     for title, rows, headers in sections:
