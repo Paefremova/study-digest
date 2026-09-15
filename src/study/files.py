@@ -103,6 +103,13 @@ def pull(moodle, data, force=False):
     return data
 
 
+def walk(cfg, moodle, do_pull=False, everything=False, force=False):
+    """По всем курсам с папкой (строки CODE): список файлов каждого, с --pull — и скачивание."""
+    for course in (c for c in cfg.track(moodle.courses()) if c.code):
+        d = listing(cfg, moodle, course, everything=everything or empty(course))
+        yield pull(moodle, d, force=force) if do_pull else d
+
+
 def summary(d, pulled=False):
     """Одна строка на курс для прохода по всем: сколько новых, скачано, пропущено."""
     can = [f for f in d["files"] if not f["skip"] and not f["have"]]

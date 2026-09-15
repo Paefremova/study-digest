@@ -6,6 +6,7 @@
 читает файл из Windows через `\\\\wsl.localhost`, а симлинки WSL оттуда не открываются.
 """
 from .config import HERE, ROOT
+from .fmt import table
 
 SOURCE = HERE / "docs" / "AGENTS.md"
 OPERATORS = {   # код → (кто читает, файл в корне учебной директории)
@@ -52,3 +53,16 @@ def install(operator):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return status(operator)
+
+
+def render(rows, installed=False):
+    """Таблица операторов; `installed` — строки после `study agent <код>`, иначе подсказка."""
+    state = {True: "актуален", False: "устарел", None: "нет"}
+    lines = [table([[r["operator"], r["file"], state[r["current"] if r["installed"] else None],
+                     r["name"]] for r in rows], ["код", "файл", "блок", "кто читает"])]
+    if installed:
+        lines += ["", "Записано: " + ", ".join(r["path"] for r in rows),
+                  "Личные правила — в том же файле вне блока study:begin…study:end."]
+    else:
+        lines += ["", "Поставить: study agent <код> [<код>…]  (блок в корне учебной директории)"]
+    return "\n".join(lines)

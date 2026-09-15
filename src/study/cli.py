@@ -145,13 +145,8 @@ def cmd_files(cfg, args):
         if args.pull:
             d = files.pull(m, d, force=args.force)
         return d, files.render(d, pulled=args.pull)
-    out, lines = [], []
-    for course in (c for c in cfg.track(m.courses()) if c.code):
-        d = files.listing(cfg, m, course, everything=args.all or files.empty(course))
-        if args.pull:
-            d = files.pull(m, d, force=args.force)
-        out.append(d)
-        lines.append(files.summary(d, pulled=args.pull))
+    out = list(files.walk(cfg, m, do_pull=args.pull, everything=args.all, force=args.force))
+    lines = [files.summary(d, pulled=args.pull) for d in out]
     return out, "\n".join(lines) or "в config.env нет папок курсов (строк CODE)"
 
 
@@ -363,15 +358,7 @@ def cmd_update(cfg, args):
 def cmd_agent(cfg, args):
     rows = [agent.install(o) for o in args.operator] if args.operator \
         else [agent.status(o) for o in agent.OPERATORS]
-    state = {True: "актуален", False: "устарел", None: "нет"}
-    lines = [table([[r["operator"], r["file"], state[r["current"] if r["installed"] else None],
-                     r["name"]] for r in rows], ["код", "файл", "блок", "кто читает"])]
-    if args.operator:
-        lines += ["", "Записано: " + ", ".join(r["path"] for r in rows),
-                  "Личные правила — в том же файле вне блока study:begin…study:end."]
-    else:
-        lines += ["", "Поставить: study agent <код> [<код>…]  (блок в корне учебной директории)"]
-    return rows, "\n".join(lines)
+    return rows, agent.render(rows, installed=bool(args.operator))
 
 
 # --- разбор аргументов
