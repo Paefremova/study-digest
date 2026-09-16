@@ -12,6 +12,7 @@ import json
 import os
 import pathlib
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -228,6 +229,9 @@ def ask_token(s, cfg, key, name, where, url):
         return
     cfg.put(key, token)
     s.ok(f"{short}: сохранён в config.env")
+    if key == "TUIS_TOKEN" and not re.fullmatch(r"[0-9a-f]{32}", token):
+        # у Moodle токен — 32 hex; в скрытый ввод легко вставить дважды
+        s.warn(f"{short}: токен не похож на 32 hex-символа ({len(token)}) — не вставлен ли дважды?")
 
 
 def tokens(s, cfg):
@@ -307,10 +311,13 @@ def courses_(s, cfg, m):
     if not yes(s.ask("скачать материалы всех курсов в stash/ сейчас? [Y/n]"), "y"):
         s.note("позже: study files --pull")
         return
+    progress = files.Progress()
     try:
-        for d in files.walk(cfg, m, do_pull=True):
+        for d in files.walk(cfg, m, do_pull=True, progress=progress):
+            progress.clear()
             print("  " + files.summary(d, pulled=True))
     except StudyError:
+        progress.clear()
         s.warn("не всё скачалось: позже study files --pull")
     else:
         s.ok("материалы курсов в stash/")

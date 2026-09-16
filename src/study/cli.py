@@ -138,14 +138,18 @@ def cmd_grades(cfg, args):
 def cmd_files(cfg, args):
     """Один курс — подробный список; без курса — все папки из config.env, по строке на курс."""
     m = Moodle(cfg)
+    progress = files.Progress()
     if args.course:
         course = named(cfg, m, args.course)
         # в пустую stash/ забираем всё: сравнивать «новое с прошлого запуска» не с чем
         d = files.listing(cfg, m, course, everything=args.all or files.empty(course))
         if args.pull:
-            d = files.pull(m, d, force=args.force)
+            d = files.pull(m, d, force=args.force, progress=progress)
+            progress.clear()
         return d, files.render(d, pulled=args.pull)
-    out = list(files.walk(cfg, m, do_pull=args.pull, everything=args.all, force=args.force))
+    out = list(files.walk(cfg, m, do_pull=args.pull, everything=args.all, force=args.force,
+                          progress=progress))
+    progress.clear()
     lines = [files.summary(d, pulled=args.pull) for d in out]
     return out, "\n".join(lines) or "в config.env нет папок курсов (строк CODE)"
 

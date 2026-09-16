@@ -6,6 +6,7 @@
 """
 import pathlib
 import re
+import sys
 
 from .config import ROOT, StudyError
 from .fmt import moment
@@ -80,13 +81,34 @@ def listing(cfg, moodle, course, since=None, everything=False):
             "all": everything, "files": out}
 
 
-def pull(moodle, data, force=False):
-    """Скачивает то, что прошло фильтр и ещё не лежит в stash."""
+class Progress:
+    """Ход загрузки одной строкой на месте — «nettech: 3/12 002-dns.pdf»; вне терминала молчит.
+    Большой курс качается десятки секунд, и без этого кажется, что всё зависло."""
+
+    def __init__(self, stream=None):
+        self.out = stream or sys.stdout
+        self.on = self.out.isatty()
+
+    def __call__(self, label, text):
+        if self.on:
+            self.out.write(f"\r\033[K  {label}: {text}"[:120])
+            self.out.flush()
+
+    def clear(self):
+        if self.on:
+            self.out.write("\r\033[K")
+            self.out.flush()
+
+
+def pull(moodle, data, force=False, progress=None):
+    """Скачивает то, что прошло фильтр и ещё не лежит в stash; `progress(курс, текст)` — ход."""
     into = pathlib.Path(data["stash"])
+    label = data["course"]["code"] or data["course"]["id"]
+    todo = [f for f in data["files"] if not f["skip"] and (force or not f["have"])]
     got, errors = [], []
-    for f in data["files"]:
-        if f["skip"] or (f["have"] and not force):
-            continue
+    for i, f in enumerate(todo, 1):
+        if progress:
+            progress(label, f"{i}/{len(todo)} {f['name']}")
         dest = into / f["name"]
         try:
             body = moodle.download(f["url"])
@@ -103,11 +125,13 @@ def pull(moodle, data, force=False):
     return data
 
 
-def walk(cfg, moodle, do_pull=False, everything=False, force=False):
+def walk(cfg, moodle, do_pull=False, everything=False, force=False, progress=None):
     """По всем курсам с папкой (строки CODE): список файлов каждого, с --pull — и скачивание."""
     for course in (c for c in cfg.track(moodle.courses()) if c.code):
+        if progress:
+            progress(course.code, "состав курса…")
         d = listing(cfg, moodle, course, everything=everything or empty(course))
-        yield pull(moodle, d, force=force) if do_pull else d
+        yield pull(moodle, d, force=force, progress=progress) if do_pull else d
 
 
 def summary(d, pulled=False):

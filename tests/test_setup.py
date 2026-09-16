@@ -68,7 +68,7 @@ class SetupTest(SetupCase):
     def test_tokens_saved_and_skipped(self):
         cfg = self.config()
         self.answers = ["n", "", "", "nettech", "", "", "n"]   # браузер, оператор, курсы, pull
-        self.secrets = ["tok", "", ""]
+        self.secrets = ["a" * 32, "", ""]
         self.moodle_ok()
         log, text, out = self.run_setup(cfg)
         self.assertIn("study  установка  [1/5] Токены\n[>] Токены  [ ] Каталоги  [ ] Проверка  "
@@ -77,7 +77,7 @@ class SetupTest(SetupCase):
                       "[x] Оператор  [x] Курсы  [>] Готово\n", out)
         self.assertIn("  > открыть в браузере? [Y/n] ", self.prompts)
         self.assertEqual(self.opened, [])
-        self.assertIn("TUIS_TOKEN=tok\n", cfg.path.read_text(encoding="utf-8"))
+        self.assertIn("TUIS_TOKEN=" + "a" * 32 + "\n", cfg.path.read_text(encoding="utf-8"))
         skipped = "пропущен, команды этого сервиса работать не будут"
         self.assertEqual([x for x in log if x[0] == "warn"],
                          [["warn", "Токены", "GitVerse: " + skipped],
@@ -118,6 +118,17 @@ class SetupTest(SetupCase):
                        "не удалось (нет токена Moodle?): позже study courses --setup"], log)
         self.assertFalse((self.root / "CLAUDE.md").exists())
         self.assertIn("  ! Проверка: Moodle не отвечает", text)
+
+    def test_token_not_hex_warns(self):
+        cfg = self.config()
+        self.answers = ["n", ""]
+        self.secrets = ["a" * 64, "", ""]
+        self.net.reply("POST", "core_webservice_get_site_info", INVALID)
+        self.net.reply("POST", "core_webservice_get_site_info", INVALID)
+        log, _, _ = self.run_setup(cfg)
+        self.assertIn(["ok", "Токены", "Moodle: сохранён в config.env"], log)
+        warn = "Moodle: токен не похож на 32 hex-символа (64) — не вставлен ли дважды?"
+        self.assertIn(["warn", "Токены", warn], log)
 
     def test_browser_failed(self):
         cfg = self.config()
@@ -199,6 +210,23 @@ class SetupTest(SetupCase):
         self.assertEqual(cfg.path.read_text(encoding="utf-8"), "# пример\nTUIS_TOKEN=\n")
         if os.name == "posix":
             self.assertEqual(oct(cfg.path.stat().st_mode)[-3:], "600")
+
+
+class ProgressTest(unittest.TestCase):
+    def test_tty_only(self):
+        quiet = io.StringIO()
+        p = files.Progress(quiet)
+        p("nettech", "1/2 a.pdf")
+        p.clear()
+        self.assertEqual(quiet.getvalue(), "")
+        tty = io.StringIO()
+        tty.isatty = lambda: True
+        p = files.Progress(tty)
+        p("nettech", "состав курса…")
+        p("nettech", "1/2 a.pdf")
+        p.clear()
+        self.assertEqual(tty.getvalue(),
+                         "\r\033[K  nettech: состав курса…\r\033[K  nettech: 1/2 a.pdf\r\033[K")
 
 
 class ScreenTest(unittest.TestCase):
