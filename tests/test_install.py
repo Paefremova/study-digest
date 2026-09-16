@@ -80,12 +80,13 @@ class InstallTest(unittest.TestCase):
         busy = self.tmp / "busy"
         busy.mkdir()
         (busy / "x").write_text("", encoding="utf-8")
-        self.answers = ["a=b", "x" * 101, str(busy), "~/study/.digest"]
+        self.answers = ["a=b", "x" * 101, str(busy), str(busy / "x"), "~/study/.digest"]
         rc, out = self.run_install()
         self.assertEqual(rc, 0)
         self.assertIn("  ! в пути нельзя '=' (ломает libvirt/virtiofsd)\n", out)
         self.assertIn("  ! слишком длинный путь (лимит unix-сокетов Packer ~108 байт)\n", out)
         self.assertIn(f"  ! {busy} существует и не пуст — выбери другой\n", out)
+        self.assertIn(f"  ! {busy / 'x'} существует и не пуст — выбери другой\n", out)   # файл
         self.assertTrue((self.tmp / "study" / ".digest" / "study").exists())
         self.assertEqual(self.calls[0][0][1], str(self.tmp / "study" / ".digest" / "study"))
 

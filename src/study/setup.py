@@ -6,6 +6,7 @@
 ещё раз на итоговом экране. Шаги, уже сделанные install.py, и их результаты приходят
 в переменной STUDY_SETUP (JSON: {"steps": [...], "log": [[ok|warn, шаг, текст], ...]}).
 """
+import contextlib
 import ctypes
 import getpass
 import json
@@ -149,8 +150,8 @@ def link_command():
         return f"~/.local/bin/study -> {launcher}"
     py = pathlib.Path(sys.executable)
     # cmd читает .cmd в OEM-кодировке: пути под профилем пишем через %USERPROFILE%
-    home = str(pathlib.Path.home())
-    cmd = f'@"{py}" "{launcher}" %*\r\n'.replace(home, "%USERPROFILE%")
+    home = re.escape(str(pathlib.Path.home()))
+    cmd = re.sub(home, "%USERPROFILE%", f'@"{py}" "{launcher}" %*\r\n', flags=re.IGNORECASE)
     try:
         raw = cmd.encode("oem")
     except (UnicodeEncodeError, LookupError):
@@ -176,7 +177,8 @@ def in_path(b):
         return os.path.normcase(os.path.normpath(os.path.expandvars(p.strip())))
     seen = [norm(p) for p in os.environ.get("PATH", "").split(os.pathsep) if p.strip()]
     if winreg:
-        seen += [norm(p) for p in user_path()[0].split(";") if p.strip()]
+        with contextlib.suppress(OSError):   # реестр недоступен — значит, и в PATH нет
+            seen += [norm(p) for p in user_path()[0].split(";") if p.strip()]
     return norm(str(b)) in seen
 
 
@@ -269,7 +271,11 @@ def check(s, m):
         s.ok("Moodle отвечает: " + m.me()["fullname"].strip())
     except StudyError:
         s.warn("Moodle не отвечает: проверь токен и TUIS_URL в config.env")
-    s.ok("команда study: " + link_command())
+    try:
+        s.ok("команда study: " + link_command())
+    except OSError as e:
+        s.warn(f"команда study не поставлена ({e}): запускай {HERE / 'study'}")
+        return
     path_hint(s)
 
 

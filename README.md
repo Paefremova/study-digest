@@ -113,8 +113,8 @@ Linux, macOS:
 curl -fsSL https://raw.githubusercontent.com/nowherewashere/study-digest/master/install.py -o install.py && python3 install.py; rm -f install.py
 ```
 
-Windows (PowerShell или Windows Terminal; в Git Bash — `winpty py install.py`, иначе
-вопросы не задаются):
+Windows (PowerShell или Windows Terminal; у Python из Microsoft Store лаунчера `py` нет —
+тогда `python install.py`; в Git Bash — `winpty py install.py`, иначе вопросы не задаются):
 
 ```powershell
 iwr https://raw.githubusercontent.com/nowherewashere/study-digest/master/install.py -OutFile install.py; py install.py; del install.py

@@ -117,7 +117,7 @@ def choose(s):
             continue
         if installed(target):
             break   # уже установлено — берём как есть
-        if target.exists() and any(target.iterdir()):
+        if target.exists() and (not target.is_dir() or any(target.iterdir())):
             s.warn(f"{target} существует и не пуст — выбери другой")
             continue
         try:

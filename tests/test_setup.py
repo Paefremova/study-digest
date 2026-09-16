@@ -287,6 +287,21 @@ class LinkTest(unittest.TestCase):
         self.assertIn(f'"{(self.here / "study").as_posix()}" "$@"\n', sh)
         self.assertNotIn("\r", sh)
 
+    def test_link_failure_is_a_warning(self):
+        s = setup.Screen(["Проверка"])
+        s.n = 1
+        patch(self, setup, "link_command", mock.Mock(side_effect=OSError("read-only")))
+        with contextlib.redirect_stdout(io.StringIO()):
+            setup.check(s, mock.Mock(me=lambda: {"fullname": "Я"}))
+        self.assertEqual(s.log[-1][:2], ["warn", "Проверка"])
+        self.assertIn("не поставлена (read-only)", s.log[-1][2])
+
+    def test_in_path_registry_error(self):
+        os.environ["PATH"] = "/usr/bin"
+        patch(self, setup, "winreg", object())
+        patch(self, setup, "user_path", mock.Mock(side_effect=OSError("denied")))
+        self.assertFalse(setup.in_path(self.bin))
+
     def test_path_hint(self):
         s = setup.Screen(["Проверка"])
         s.n = 1
