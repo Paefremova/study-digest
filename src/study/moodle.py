@@ -3,6 +3,7 @@ from . import net
 from .config import StudyError
 
 PAGE = 50   # предел limitnum у календаря
+WRITE = {"mod_assign_save_submission"}   # необратимые ручки: без повторов (см. net.RETRIES)
 
 
 class Moodle:
@@ -25,8 +26,8 @@ class Moodle:
                     form[f"{key}[{i}]"] = item
             elif value is not None:
                 form[key] = value
-        out = net.request(f"{self.base}/webservice/rest/server.php", "moodle",
-                          form=form, where=fn)
+        out = net.request(f"{self.base}/webservice/rest/server.php", "moodle", form=form,
+                          where=fn, retries=0 if fn in WRITE else net.RETRIES)
         if isinstance(out, dict) and out.get("exception"):
             raise StudyError("moodle", out.get("message", "ошибка"),
                              code=out.get("errorcode"), where=fn)
@@ -105,7 +106,7 @@ class Moodle:
         """Файлы курса качаются не через REST: GET по fileurl с токеном в query."""
         sep = "&" if "?" in fileurl else "?"
         return net.raw(fileurl + sep + "token=" + self.cfg.token("TUIS_TOKEN"),
-                       "moodle", where="pluginfile")
+                       "moodle", where="pluginfile", retries=net.RETRIES)
 
     def functions(self):
         return sorted(f["name"] for f in self.me()["functions"])

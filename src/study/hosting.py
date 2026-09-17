@@ -64,7 +64,7 @@ class GitVerse(Hosting):
 
     def releases(self):
         """Ответ GitVerse — голый массив."""
-        out = self.api(f"/repos/{self.repo}/releases") or []
+        out = self.api(f"/repos/{self.repo}/releases", retries=net.RETRIES) or []
         return [{"tag": r["tag_name"], "id": r["id"], "name": r.get("name"),
                  "assets": len(r.get("assets") or []),
                  "url": self.web_url(r["tag_name"])} for r in out]
@@ -116,7 +116,7 @@ class SourceCraft(Hosting):
 
     def releases(self):
         """Ответ SourceCraft — объект {"releases": [...]} с другими именами полей."""
-        out = self.api(f"/repos/{self.repo}/releases") or {}
+        out = self.api(f"/repos/{self.repo}/releases", retries=net.RETRIES) or {}
         return [{"tag": r.get("tag"), "id": r.get("id"), "name": r.get("title"),
                  "status": r.get("status"), "assets": len(r.get("assets") or []),
                  "url": self.web_url(r.get("tag"))} for r in out.get("releases", [])]

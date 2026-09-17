@@ -166,11 +166,11 @@ class FakeNet:
         return [r["form"] for r in self.sent if r["form"] and r["form"].get("wsfunction") == fn]
 
     def send(self, url, source, *, method=None, headers=None, data=None, timeout=600,
-             where=None):
+             where=None, retries=0):
         method = method or ("POST" if data is not None else "GET")
         rec = {"method": method, "url": url, "source": source, "where": where,
-               "timeout": timeout, "headers": dict(headers or {}), "data": data,
-               **decode(headers, data)}
+               "timeout": timeout, "retries": retries, "headers": dict(headers or {}),
+               "data": data, **decode(headers, data)}
         self.sent.append(rec)
         head = f"{method} {url}"
         pairs = [f"{k}={v}" for k, v in (rec["form"] or {}).items()]

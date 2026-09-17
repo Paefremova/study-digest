@@ -1,3 +1,4 @@
+import io
 import ssl
 import unittest
 import urllib.error
@@ -44,6 +45,52 @@ class NetTest(unittest.TestCase):
             net.send("https://x.example/", "moodle")
         self.assertEqual((e.exception.code, e.exception.hint()), (None, None))
         self.assertIn("нет связи", e.exception.message)
+
+    def test_retries(self):
+        """Повторы: 502–504 и обрыв — до retries раз с паузой; 4xx, сертификат — сразу."""
+        class Reply:
+            status, headers = 200, {}
+
+            def read(self):
+                return b"ok"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+        def fails(*errors):
+            queue = list(errors)
+
+            def urlopen(*_, **__):
+                e = queue.pop(0)
+                if e is None:
+                    return Reply()
+                raise e
+            return urlopen
+
+        def http(code):
+            # fp обязателен: в 3.8 без него read() падает, а настоящий urlopen его даёт всегда
+            return urllib.error.HTTPError("https://x.example/", code, "err", {}, io.BytesIO())
+
+        naps = []
+        patch(self, net.time, "sleep", naps.append)
+        patch(self, urllib.request, "urlopen", fails(http(502), OSError("reset"), None))
+        self.assertEqual(net.send("https://x.example/", "moodle", retries=2)[2], b"ok")
+        self.assertEqual(naps, [net.RETRY_PAUSE, net.RETRY_PAUSE])
+        cert = urllib.error.URLError(ssl.SSLCertVerificationError(1, "CERTIFICATE_VERIFY_FAILED"))
+        for bad, tries in ((http(502), 3), (http(400), 1), (cert, 1)):
+            naps.clear()
+            patch(self, urllib.request, "urlopen", fails(bad, bad, bad, None))
+            with self.assertRaises(StudyError) as e:
+                net.send("https://x.example/", "moodle", retries=2)
+            self.assertEqual(len(naps), tries - 1, bad)
+        self.assertEqual(e.exception.code, "certificate")
+        patch(self, urllib.request, "urlopen", fails(http(503), None))
+        with self.assertRaises(StudyError) as e:   # по умолчанию повторов нет
+            net.send("https://x.example/", "moodle")
+        self.assertIn("HTTP 503", e.exception.message)
 
     def test_multipart(self):
         body, ctype = net.multipart({"a": "1"},

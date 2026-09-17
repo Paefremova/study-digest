@@ -1,5 +1,6 @@
 import unittest
 
+from study import net
 from study.config import StudyError
 from study.moodle import PAGE, Moodle
 from tests.fakes import FakeNet, config, fixture, tmpdir
@@ -23,7 +24,8 @@ class MoodleTest(unittest.TestCase):
         self.assertEqual(req["form"], {"wstoken": "test-token", "moodlewsrestformat": "json",
                                        "wsfunction": "mod_quiz_get_quizzes_by_courses",
                                        "courseids[0]": "1", "courseids[1]": "2"})
-        self.assertEqual(req["where"], "mod_quiz_get_quizzes_by_courses")
+        self.assertEqual((req["where"], req["retries"]),
+                         ("mod_quiz_get_quizzes_by_courses", net.RETRIES))   # чтение — с повторами
 
     def test_call_skips_none_and_empty_list(self):
         self.net.reply("POST", "core_calendar_get_action_events_by_timesort", {"events": []})
@@ -153,6 +155,7 @@ class MoodleTest(unittest.TestCase):
     def test_save_submission(self):
         self.net.reply("POST", "mod_assign_save_submission", [])
         self.m.save_submission(11, "# Ответ", itemid=77)
+        self.assertEqual(self.net.sent[-1]["retries"], 0)   # необратимо — без повторов
         form = self.net.calls("mod_assign_save_submission")[0]
         self.assertEqual({k: v for k, v in form.items() if k.startswith(("assign", "plugin"))},
                          {"assignmentid": "11", "plugindata[onlinetext_editor][text]": "# Ответ",

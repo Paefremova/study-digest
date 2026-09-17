@@ -4,6 +4,7 @@ urllib по умолчанию представляется `Python-urllib/3.12`
 """
 import json as jsonlib
 import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -12,6 +13,11 @@ import uuid
 from .config import StudyError
 
 UA = "study/1"
+# Повторы для чтения: обрыв, таймаут и 502–504 у Moodle случаются и проходят сами.
+# Запись (отправка ответа, релиз, загрузка видео) не повторяется — второй раз она не идемпотентна.
+RETRIES = 2         # повторов после первой попытки
+RETRY_PAUSE = 2     # секунд между попытками
+RETRY_HTTP = {502, 503, 504}
 
 
 def multipart(fields, files):
@@ -28,37 +34,49 @@ def multipart(fields, files):
     return bytes(out), f"multipart/form-data; boundary={b}"
 
 
-def send(url, source, *, method=None, headers=None, data=None, timeout=600, where=None):
-    """Один поход в сеть → (код, заголовки, тело). Тело ошибки читается обязательно:
+def error(e, source, where):
+    """Ошибка сети → (StudyError, стоит ли повторить). Тело HTTP-ошибки читается обязательно:
     GitVerse отвечает 400/422 с пустым телом, и без чтения пользователь увидит меньше,
     чем видел с curl."""
+    if isinstance(e, urllib.error.HTTPError):
+        detail = (e.read() or b"")[:200].decode("utf-8", "replace").strip()
+        msg = f"HTTP {e.code}: {detail}" if detail else f"HTTP {e.code} (пустой ответ)"
+        return StudyError(source, msg, where=where), e.code in RETRY_HTTP
+    if isinstance(e, urllib.error.URLError):
+        # macOS со сборкой python.org без «Install Certificates.command» не доверяет никому
+        bad_cert = isinstance(e.reason, ssl.SSLCertVerificationError)
+        return StudyError(source, f"нет связи: {e.reason}", where=where,
+                          code="certificate" if bad_cert else None), not bad_cert
+    return StudyError(source, f"нет связи: {e}", where=where), True   # обрыв после соединения
+
+
+def send(url, source, *, method=None, headers=None, data=None, timeout=600, where=None,
+         retries=0):
+    """Поход в сеть → (код, заголовки, тело); до `retries` повторов на проходящих ошибках."""
     head = {"User-Agent": UA}
     head.update(headers or {})
     req = urllib.request.Request(url, data=data, headers=head,
                                  method=method or ("POST" if data is not None else "GET"))
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, dict(r.headers), r.read()
-    except urllib.error.HTTPError as e:
-        detail = (e.read() or b"")[:200].decode("utf-8", "replace").strip()
-        msg = f"HTTP {e.code}: {detail}" if detail else f"HTTP {e.code} (пустой ответ)"
-        raise StudyError(source, msg, where=where) from None
-    except urllib.error.URLError as e:
-        # macOS со сборкой python.org без «Install Certificates.command» не доверяет никому
-        bad_cert = isinstance(e.reason, ssl.SSLCertVerificationError)
-        raise StudyError(source, f"нет связи: {e.reason}", where=where,
-                         code="certificate" if bad_cert else None) from None
-    except OSError as e:   # обрыв или таймаут уже после соединения
-        raise StudyError(source, f"нет связи: {e}", where=where) from None
+    for attempt in range(retries + 1):
+        if attempt:
+            time.sleep(RETRY_PAUSE)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return r.status, dict(r.headers), r.read()
+        except (urllib.error.URLError, OSError) as e:   # HTTPError — тоже URLError
+            err, again = error(e, source, where)
+            if not again:
+                break
+    raise err from None
 
 
-def raw(url, source, *, headers=None, timeout=600, where=None):
+def raw(url, source, *, headers=None, timeout=600, where=None, retries=0):
     """GET, отдающий байты: файлы курсов приходят не JSON."""
-    return send(url, source, headers=headers, timeout=timeout, where=where)[2]
+    return send(url, source, headers=headers, timeout=timeout, where=where, retries=retries)[2]
 
 
 def request(url, source, *, method=None, headers=None, form=None, json_body=None,
-            files=None, fields=None, timeout=120, where=None):
+            files=None, fields=None, timeout=120, where=None, retries=0):
     """Один запрос. Возвращает разобранный JSON, либо текст, если это не JSON."""
     head = dict(headers or {})
     data = None
@@ -73,7 +91,7 @@ def request(url, source, *, method=None, headers=None, form=None, json_body=None
         data, head["Content-Type"] = multipart(fields, files)
 
     body = send(url, source, method=method, headers=head, data=data,
-                timeout=timeout, where=where)[2]
+                timeout=timeout, where=where, retries=retries)[2]
     if not body:
         return None
     try:

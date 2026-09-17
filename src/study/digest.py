@@ -473,6 +473,10 @@ def render(d):
         out += ["\n## Предлагаю начать\n",
                 (f"**{a['short']}** · {code or a['course']['title']} · до {a['due']['text']} · "
                  f"методички: {code + '/stash/' if code else 'каталога курса нет'}")]
+    if d.get("errors"):
+        # сбой раздела — не молча: в тексте иначе не видно, чего в сводке не хватает
+        out.append("\nНе удалось: " + "; ".join(
+            f"{e['source']} · {e['where']} · {e['message'][:80]}" for e in d["errors"]) + ".")
     hints = update.note(d.get("update"))
     if hints:
         out.append("\n" + "\n".join(hints))
@@ -481,7 +485,8 @@ def render(d):
 
 def render_digest(d):
     """`study digest`: тот же вид, но без состояния локальных репозиториев."""
-    return render({"now": d["now"], "days": d["days"], "tuis": d, "courses": []})
+    return render({"now": d["now"], "days": d["days"], "tuis": d, "courses": [],
+                   "errors": d["errors"]})
 
 
 # --- состояние локальных репозиториев

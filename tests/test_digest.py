@@ -190,6 +190,8 @@ class CollectorTest(DigestCase):
         self.assertEqual([g["course"]["id"] for g in d["grades"]], [2])
         self.assertEqual([(e["code"], e["where"]) for e in d["errors"]],
                          [("nopermissiontoviewgrades", "оценки, курс 1")])
+        self.assertTrue(digest.render_digest(d).endswith(
+            "\nНе удалось: moodle · оценки, курс 1 · no."))
 
     def test_render_golden(self):
         _, d = self.collect()
