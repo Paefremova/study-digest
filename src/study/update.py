@@ -9,6 +9,7 @@ from . import agent, local
 from .config import HERE, StudyError
 
 FETCH_TIMEOUT = 8   # секунд: утренняя сводка не должна ждать GitHub
+VERIFY_TIMEOUT = 10  # gpg локально; без ключа автора в связке подпись просто «не проверена»
 
 
 def version(ref="HEAD"):
@@ -26,15 +27,31 @@ def check(fetch=True):
             why = r.stderr.strip() if r else f"нет ответа за {FETCH_TIMEOUT} с"
             raise StudyError("git", f"fetch не удался: {why}", where="update")
     commits = local.git(HERE, "log", "--format=%s", "HEAD..@{u}").splitlines()
+    # Что именно приедет: diff и подпись верхнего коммита — код работает с токенами,
+    # и перед pull человек должен видеть, что тянет.
+    stat = local.git(HERE, "diff", "--stat", "HEAD..@{u}") if commits else ""
+    verified = local.run(HERE, "verify-commit", "@{u}", timeout=VERIFY_TIMEOUT) if commits else None
     return {"version": version(), "remote": version("@{u}"), "behind": len(commits),
             "ahead": int(local.git(HERE, "rev-list", "--count", "@{u}..HEAD") or 0),
-            "commits": commits,
+            "commits": commits, "stat": stat,
+            "signed": None if verified is None else verified.returncode == 0,
             "agents": [s for s in map(agent.status, agent.OPERATORS) if s["installed"]]}
 
 
-def apply():
-    """git pull --ff-only, затем обновить блоки у установленных операторов."""
-    before = check()
+def plan(d):
+    """Что сделает `study update`: коммиты, затронутые файлы, подпись."""
+    out = [f"Обновление study: {d['version']} → {d['remote']}"]
+    out += [f"  {c}" for c in d["commits"]]
+    out += [f" {ln}" for ln in d["stat"].splitlines()]   # у git уже один пробел
+    out.append("Подпись коммита проверена." if d["signed"] else
+               "Подпись коммита НЕ проверена: нет ключа автора в gpg или коммит не подписан.")
+    return out
+
+
+def apply(before=None):
+    """git pull --ff-only, затем обновить блоки у установленных операторов.
+    `before` — уже полученный check(), чтобы не ходить за fetch дважды."""
+    before = before or check()
     if before is None:
         raise StudyError("git", f"{HERE} — не git-клон с upstream, обновлять нечего",
                          where="update")
@@ -54,7 +71,10 @@ def note(d):
             and not 12 <= n % 100 <= 14 else "коммитов"
         out.append(f"Обновление study: {d['version']} → {d['remote']}, {n} {word} "
                    f"({'; '.join(d['commits'][:3])}{'; …' if n > 3 else ''}) — `study update`.")
-    for s in (d or {}).get("agents", []):
-        if not s["current"]:
-            out.append(f"Блок агента в {s['file']} устарел — `study agent {s['operator']}`.")
-    return out
+    return out + stale(d)
+
+
+def stale(d):
+    """Строки про устаревшие блоки агента у операторов."""
+    return [f"Блок агента в {s['file']} устарел — `study agent {s['operator']}`."
+            for s in (d or {}).get("agents", []) if not s["current"]]

@@ -348,11 +348,21 @@ def cmd_answer(cfg, args):
 
 
 def cmd_update(cfg, args):
-    d = update.check() if args.check else update.apply()
+    d = update.check()
     if d is None:
         return d, "Это не git-клон с upstream: обновлять нечего."
     if args.check:
-        return d, "\n".join(update.note(d)) or f"Актуально: {d['version']}."
+        lines = update.plan(d) if d["behind"] else [f"Актуально: {d['version']}."]
+        return d, "\n".join(lines + update.stale(d))
+    if d["behind"] and not args.yes:
+        # код работает с токенами: сначала показать, что приедет; без терминала — только --yes
+        lines = update.plan(d)
+        if not sys.stdin.isatty():
+            return d, "\n".join([*lines, "", "Повтори с --yes."]), 1
+        print("\n".join(lines))
+        if not setup.yes(input("Обновить? [y/N] "), "n"):
+            return d, "Отменено.", 1
+    d = update.apply(d)
     lines = ([f"Обновлено: {d['version']} → {d['now']}"] + [f"  {c}" for c in d["commits"]]
              if d["updated"] else [f"Уже актуально: {d['now']}."])
     lines += [f"Блок агента обновлён: {f}" for f in d["refreshed"]]
@@ -409,6 +419,8 @@ def tuis_parsers(sub):
 
     s = add(sub, "update", "обновить study из репозитория и блоки агента", cmd_update)
     s.add_argument("--check", action="store_true", help="только проверить, ничего не менять")
+    s.add_argument("--yes", "-y", action="store_true",
+                   help="обновить без вопроса (без терминала — обязателен)")
 
     add(sub, "setup", "первоначальная настройка: токены, каталоги, команда в PATH, оператор, курсы",
         cmd_setup)
