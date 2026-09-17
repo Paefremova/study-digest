@@ -30,7 +30,8 @@ DEFAULTS = {
 HINTS = {
     "invalidtoken": "Токен просрочен или отозван. Профиль Moodle → «Ключи безопасности» → "
                     "служба Moodle mobile web service → «Очистка», значение показывается один раз.",
-    "nopermissiontoviewgrades": "Запись на курс истекла, оценки недоступны.",
+    "nopermissiontoviewgrades": "В курсе выключен показ оценок студентам (или запись истекла); "
+                                "сводка такой курс в «Баллах» пропускает.",
     "invalidrecord": "Функция не входит в службу этого токена: у служб РУДН свои ключи.",
     "notoken": "Статические токены — строками в config.env (их спрашивает `study setup`), "
                "Rutube — `study rt jwt` или `study rt login`. См. README.md, «Установка».",

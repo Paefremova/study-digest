@@ -154,7 +154,7 @@ class CollectorTest(DigestCase):
         self.assertTrue(g[2]["items"][0]["new"])
         self.assertEqual([(o["course"]["id"], o["count"], o["nearest"]["name"])
                           for o in d["outside"]],
-                         [(4, 3, "Сдать нормативы"), (3, 1, "Курсовая")])
+                         [(3, 1, "Курсовая")])   # курс 4 в COURSE_IGNORE — не показывается
 
     def test_snapshot(self):
         c, d = self.collect()
@@ -183,13 +183,14 @@ class CollectorTest(DigestCase):
         queue(self.net)
         self.net.drop("gradereport_user_get_grade_items")
         self.net.reply("POST", ("gradereport_user_get_grade_items", "courseid=1"),
-                       {"exception": "x", "errorcode": "nopermissiontoviewgrades", "message": "no"})
+                       {"exception": "x", "errorcode": "invalidrecord", "message": "no"})
+        # выключенный показ оценок — настройка курса, не сбой: молча без строки в «Баллах»
         self.net.reply("POST", ("gradereport_user_get_grade_items", "courseid=2"),
-                       fixture("grade_items_no_total"))
+                       {"exception": "x", "errorcode": "nopermissiontoviewgrades", "message": "no"})
         d = digest.Collector(self.cfg, Moodle(self.cfg), 21, STATE).run()
-        self.assertEqual([g["course"]["id"] for g in d["grades"]], [2])
+        self.assertEqual(d["grades"], [])
         self.assertEqual([(e["code"], e["where"]) for e in d["errors"]],
-                         [("nopermissiontoviewgrades", "оценки, курс 1")])
+                         [("invalidrecord", "оценки, курс 1")])
         self.assertTrue(digest.render_digest(d).endswith(
             "\nНе удалось: moodle · оценки, курс 1 · no."))
 

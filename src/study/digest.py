@@ -25,6 +25,7 @@ SUBMISSION = {"new": "не сдано", "draft": "черновик", "reopened":
 AUTO_EVENTS = {"assign_due_soon", "assign_due_digest", "assign_notification", "newlogin"}
 DAY = 86400
 URGENT = 2 * DAY
+HOT = 7 * DAY       # «Горит»: несданное, что просрочено или на этой неделе
 MONTH = 30 * DAY
 
 
@@ -60,6 +61,7 @@ class Collector:
         self.graded = state.get("grades")             # {курс: {работа: балл}}; None — нет снимка
         self.errors = list(errors)                    # с чем пришёл снимок
         self.courses = {c.id: c for c in cfg.track(moodle.courses())}
+        self.ignore = cfg.ignore()   # решение пользователя: этих курсов в сводке нет вовсе
         self.assigns = {}       # id задания → строка сводки (для снимка)
         self.soon, self.overdue = [], []
         self._contents = {}
@@ -227,7 +229,13 @@ class Collector:
         out = []
         for cid in self.courses:
             with self.soft(f"оценки, курс {cid}"):
-                for t in self.moodle.grades(cid):
+                try:
+                    report = self.moodle.grades(cid)
+                except StudyError as e:
+                    if e.code == "nopermissiontoviewgrades":
+                        continue   # в курсе выключен показ оценок: настройка, а не сбой
+                    raise
+                for t in report:
                     got = [i for i in t.get("gradeitems", [])
                            if i.get("graderaw") is not None and i.get("itemtype") != "course"]
                     if not got:
@@ -251,14 +259,15 @@ class Collector:
         return out
 
     def outside(self):
-        """Сроки по календарю у курсов вне списка: в игноре или скрытых."""
+        """Сроки по календарю у курсов, скрытых в ТУИС: вдруг скрыт по ошибке. Игнор — нет."""
         events = []
         with self.soft("календарь"):
             events = self.moodle.calendar(self.now - 7 * DAY, self.now + 120 * DAY)
         groups = {}
         for e in events:
             c = e.get("course") or {}
-            if c.get("id") and c["id"] not in self.courses and self.within(e.get("timesort", 0)):
+            if (c.get("id") and c["id"] not in self.courses and c["id"] not in self.ignore
+                    and self.within(e.get("timesort", 0))):
                 groups.setdefault((c["id"], c.get("fullname") or c.get("shortname")), []).append(e)
         return [{"course": {"id": cid, "title": name}, "count": len(evs),
                  "nearest": {"name": (min(evs, key=lambda x: x["timesort"])["name"] or "")[:60],
@@ -421,6 +430,14 @@ def quiz_rows(t):
     return rows
 
 
+def hot_line(a):
+    """Строка «Горит»: несданная работа, когда и где методички — без домыслов агента."""
+    code = a["course"]["code"]
+    left = "просрочено" if a["due"]["overdue"] else a["due"]["left"]
+    return (f"- **{a['short']}** · {label(a)} · до {a['due']['text']} · {left} · "
+            f"методички: {code + '/stash/' if code else 'каталога курса нет'}")
+
+
 def outside_rows(t):
     return [[o["nearest"]["at"]["text"], o["nearest"]["name"],
              f"{o['course']['title']} (id {o['course']['id']}, ещё {o['count']})"]
@@ -458,21 +475,14 @@ def render(d):
         ("Уведомления", [[n["at"]["text"], n["subject"]] for n in t.get("notifications", [])],
          ["Когда", "Тема"]),
         ("Новое в курсах", news, ["Курс", "Раздел", "Что", "Файлы"]),
-        ("Дедлайны вне списка курсов", outside_rows(t), ["Когда", "Работа", "Курс"]),
+        ("Сроки в скрытых курсах", outside_rows(t), ["Когда", "Работа", "Курс"]),
     ]
     for title, rows, headers in sections:
         if rows:
             out += [f"\n## {title}\n", md_table(rows, headers)]
-    if t.get("outside"):
-        out.append("\nКурс в COURSE_IGNORE или скрыт в ТУИС: убрать из игнора "
-                   "(`study courses --setup`) или убедиться, что он неактуален.")
-    todo = t.get("not_started") or []
-    if todo:
-        a = todo[0]
-        code = a["course"]["code"]
-        out += ["\n## Предлагаю начать\n",
-                (f"**{a['short']}** · {code or a['course']['title']} · до {a['due']['text']} · "
-                 f"методички: {code + '/stash/' if code else 'каталога курса нет'}")]
+    hot = [a for a in t.get("not_started", []) if a["due"]["left_sec"] < HOT]
+    if hot:
+        out += ["\n## Горит\n"] + [hot_line(a) for a in hot]
     if d.get("errors"):
         # сбой раздела — не молча: в тексте иначе не видно, чего в сводке не хватает
         out.append("\nНе удалось: " + "; ".join(
