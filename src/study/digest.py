@@ -50,7 +50,7 @@ def by_due(items):
 class Collector:
     """Один обход ТУИС. Каждый метод — раздел сводки; общее (окно, снимок, курсы) — в атрибутах."""
 
-    def __init__(self, cfg, moodle, days, state):
+    def __init__(self, cfg, moodle, days, state, errors=()):
         self.moodle = moodle
         self.now = int(time.time())
         self.days = days
@@ -58,7 +58,7 @@ class Collector:
         self.since = state.get("last_run")            # None — первый запуск
         self.known = state.get("assignments", {})     # id задания → срок с прошлого запуска
         self.graded = state.get("grades")             # {курс: {работа: балл}}; None — нет снимка
-        self.errors = []
+        self.errors = list(errors)                    # с чем пришёл снимок
         self.courses = {c.id: c for c in cfg.track(moodle.courses())}
         self.assigns = {}       # id задания → строка сводки (для снимка)
         self.soon, self.overdue = [], []
@@ -307,7 +307,8 @@ def collect(cfg, moodle, days=None, save=True, since=None):
     """Всё, что знает ТУИС: дедлайны, тесты, обновления, уведомления, баллы.
 
     `since` — что считать прошлым запуском, строка `--since` (см. `snapshot.load_state`)."""
-    c = Collector(cfg, moodle, days or cfg.days(), load_state(cfg, since))
+    errors = []
+    c = Collector(cfg, moodle, days or cfg.days(), load_state(cfg, since, errors), errors)
     data = c.run()
     if save:
         save_state(cfg, c.snapshot(data))

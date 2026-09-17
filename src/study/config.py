@@ -40,6 +40,18 @@ HINTS = {
 }
 
 
+def write_atomic(path, text, mode=None):
+    """Файл целиком: во временный рядом и os.replace — обрыв не оставит половины.
+    mode — права с момента создания (на Windows ничего не значит)."""
+    path = pathlib.Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.unlink(missing_ok=True)   # остаток прошлого обрыва: иначе O_TRUNC сохранит его права
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode or 0o666)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    tmp.replace(path)
+
+
 class StudyError(Exception):
     """Единственный тип ошибки во всём инструменте."""
 
@@ -130,7 +142,8 @@ class Config:
     def put(self, key, value):
         """KEY=value в config.env: заменить строку с этим ключом или дописать в конец."""
         lines = self.path.read_text(encoding="utf-8").splitlines() if self.path.exists() else []
-        self._write([ln for ln in lines if not re.match(rf"\s*{key}\s*=", ln)] + [f"{key}={value}"])
+        self._write([ln for ln in lines if not re.match(rf"\s*{re.escape(key)}\s*=", ln)]
+                    + [f"{key}={value}"])
         self._values[key] = value
         self._tokens.pop(key, None)
 
@@ -158,10 +171,8 @@ class Config:
         self._ignore, self._codes = set(ignore_ids), dict(codes)
 
     def _write(self, lines):
-        """config.env целиком; права 600 — там, где они есть (на Windows chmod ничего не значит)."""
-        self.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        if os.name == "posix":
-            self.path.chmod(0o600)
+        """config.env целиком, с правами 600 с момента создания."""
+        write_atomic(self.path, "\n".join(lines) + "\n", 0o600)
 
     # --- сводка
 

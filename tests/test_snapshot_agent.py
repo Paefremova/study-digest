@@ -32,6 +32,30 @@ class SnapshotTest(unittest.TestCase):
         with self.assertRaises(StudyError):
             snapshot.load_state(self.cfg, "вчера")
 
+    def test_broken_state_falls_back_to_history(self):
+        current = self.cfg.state_file()
+        errors = []
+        current.write_text("{\"last_run\": 1_7", encoding="utf-8")   # обрыв записи
+        self.assertEqual(snapshot.load_state(self.cfg, errors=errors), {})
+        self.assertEqual([e["message"] for e in errors],
+                         [".state.json повреждён, считаю первым запуском"])
+        snapshot.save_state(self.cfg, {"last_run": 1_700_000_000, "grades": {"1": {}}})
+        snapshot.save_state(self.cfg, {"last_run": 1_700_000_000 + snapshot.DAY, "grades": {}})
+        current.write_text("", encoding="utf-8")
+        day = time.strftime("%Y-%m-%d", time.localtime(1_700_000_000 + snapshot.DAY))
+        (snapshot.history_dir(self.cfg) / f"{day}.json").write_text("{", encoding="utf-8")
+        errors = []
+        state = snapshot.load_state(self.cfg, errors=errors)
+        self.assertEqual(state["last_run"], 1_700_000_000)   # последний целый дневной
+        self.assertEqual(errors[0]["message"], ".state.json повреждён, взят снимок за "
+                         + time.strftime("%Y-%m-%d", time.localtime(1_700_000_000)))
+        self.assertEqual(snapshot.load_state(self.cfg), state)   # без списка ошибок — молча
+        # --since по дате тоже пропускает битый дневной; сохранение лечит текущий файл
+        self.assertEqual(snapshot.load_state(self.cfg, day)["last_run"], 1_700_000_000)
+        snapshot.save_state(self.cfg, state)
+        self.assertEqual(json.loads(current.read_text(encoding="utf-8")), state)
+        self.assertFalse(current.with_name(".state.json.tmp").exists())
+
     def test_history_pruned(self):
         old = 1_700_000_000
         snapshot.save_state(self.cfg, {"last_run": old})

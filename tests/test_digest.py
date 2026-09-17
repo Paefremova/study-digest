@@ -207,6 +207,16 @@ class CollectorTest(DigestCase):
         self.assertEqual(d["since"]["ts"], NOW - DAY)
         self.assertEqual(json.loads(self.cfg.state_file().read_text(encoding="utf-8")), saved)
 
+    def test_collect_with_broken_snapshot(self):
+        queue(self.net, since=False)
+        self.cfg.state_file().write_text("{\"last_run\": 17", encoding="utf-8")
+        d = digest.collect(self.cfg, Moodle(self.cfg))
+        self.assertTrue(d["first_run"])
+        self.assertEqual([e["message"] for e in d["errors"]],
+                         [".state.json повреждён, считаю первым запуском"])
+        self.assertEqual(json.loads(self.cfg.state_file().read_text(encoding="utf-8"))["last_run"],
+                         NOW)   # сохранение вылечило файл
+
 
 class StateTest(DigestCase):
     """`study state`: репозиторий курса на диске, релизы на хостингах, пара лаба ↔ задание."""

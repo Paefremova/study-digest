@@ -56,6 +56,23 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(Config(self.path).codes(), {5: "five"})
         if os.name == "posix":
             self.assertEqual(oct(self.path.stat().st_mode)[-3:], "600")
+        self.assertFalse(self.path.with_name("config.env.tmp").exists())
+
+    def test_put_escapes_key(self):
+        # точка в ключе — не «любой символ»: A.B не должен снести строку AXB
+        cfg = self.write("AXB=1\nA.B=2\n")
+        cfg.put("A.B", "3")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "AXB=1\nA.B=3\n")
+
+    def test_write_atomic_replaces_open_permissions(self):
+        # файл с прежними правами 644 подменяется целиком: 600 с момента создания
+        self.path.write_text("TUIS_TOKEN=old\n", encoding="utf-8")
+        if os.name == "posix":
+            self.path.chmod(0o644)
+        Config(self.path).put("TUIS_TOKEN", "new")
+        if os.name == "posix":
+            self.assertEqual(oct(self.path.stat().st_mode)[-3:], "600")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "TUIS_TOKEN=new\n")
 
     def test_track(self):
         cfg = self.write("COURSE_IGNORE=2\nCODE 1 one\n")
